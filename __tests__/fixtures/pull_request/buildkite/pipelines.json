@@ -1,0 +1,61 @@
+[
+  {
+    "id": "should-not-show-because-of-missing-env",
+    "description": null,
+    "url": "https://api.buildkite.com/v2/organizations/some-org/pipelines/should-not-show-because-of-missing-env",
+    "web_url": "https://buildkite.com/some-org/a",
+    "name": "Should not show because gh-control env is missing",
+    "slug": "should-not-show-because-of-missing-env",
+    "repository": "git@github.com:some-org/some-repo.git",
+    "env": {}
+  },
+  {
+    "id": "should-not-show-because-of-wrong-repo",
+    "description": "",
+    "url": "https://api.buildkite.com/v2/organizations/some-org/pipelines/should-not-show-because-of-wrong-repo",
+    "web_url": "https://buildkite.com/some-org/should-not-show-because-of-wrong-repo",
+    "name": "Should not show because of wrong repository",
+    "slug": "should-not-show-because-of-wrong-repo",
+    "repository": "git@github.com:Canva/infrastructure.git",
+    "env": {
+      "GH_CONTROL_IS_VALID_BRANCH_BUILD": "true"
+    }
+  },
+  {
+    "id": "some-pipeline-lite",
+    "description": "This is a proper description with a | pipe",
+    "url": "https://api.buildkite.com/v2/organizations/some-org/pipelines/some-pipeline-lite",
+    "web_url": "https://buildkite.com/some-org/some-pipeline-lite",
+    "name": "Some pipeline lite",
+    "slug": "some-pipeline-lite",
+    "repository": "git@github.com:some-org/some-repo.git",
+    "env": {
+      "GH_CONTROL_IS_VALID_BRANCH_BUILD": "true"
+    }
+  },
+  {
+    "id": "some-pipeline",
+    "description": null,
+    "url": "https://api.buildkite.com/v2/organizations/some-org/pipelines/some-pipeline",
+    "web_url": "https://buildkite.com/some-org/some-pipeline",
+    "name": "Some pipeline",
+    "slug": "some-pipeline",
+    "repository": "git@github.com:some-org/some-repo.git",
+    "env": {
+      "GH_CONTROL_IS_VALID_BRANCH_BUILD": "true"
+    }
+  },
+  {
+    "id": "a-pipeline",
+    "description": null,
+    "url": "https://api.buildkite.com/v2/organizations/some-org/pipelines/a-pipeline",
+    "web_url": "https://buildkite.com/some-org/a-pipeline",
+    "name": "A pipeline",
+    "slug": "a-pipeline",
+    "repository": "git@github.com:some-org/some-repo.git",
+    "env": {
+      "GH_CONTROL_IS_VALID_BRANCH_BUILD": "true",
+      "GH_CONTROL_README_URL": "https://example.com/does-templating-work?COMMITISH=${COMMITISH}&ORG=$ORG&REPO=${REPO}"
+    }
+  }
+]

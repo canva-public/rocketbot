@@ -1,0 +1,7 @@
+{
+  "httpMethod": "POST",
+  "headers": {
+    "X-GitHub-Event": "pull_request"
+  },
+  "body": "broken JSON"
+}

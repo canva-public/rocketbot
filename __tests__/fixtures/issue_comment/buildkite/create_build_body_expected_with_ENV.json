@@ -1,0 +1,23 @@
+{
+  "commit": "c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ff",
+  "branch": "some-user/some-branch",
+  "message": "On-demand build for branch \"some-user/some-branch\" requested by @some-user from PR #9500",
+  "ignore_pipeline_branch_filters": true,
+  "author": {
+    "name": "Some User",
+    "email": "some-user@some-domain.com"
+  },
+  "env": {
+    "GH_CONTROL_BUILD": true,
+    "GH_CONTROL_GITHUB_USER": "some-user",
+    "GH_CONTROL_GITHUB_USER_EMAIL": "some-user@some-domain.com",
+    "GH_CONTROL_GITHUB_USER_NAME": "Some User",
+    "GH_CONTROL_GITHUB_TRIGGER_COMMENT_URL": "https://api.github.com/repos/some-org/some-repo/issues/comments/1111111",
+    "GH_CONTROL_PR_NUMBER": 9500,
+    "GH_CONTROL_PR_TITLE": "test",
+    "GH_CONTROL_PR_BASE_BRANCH": "master",
+    "GH_CONTROL_PR_BASE_REPO": "some-org/some-repo",
+    "GH_CONTROL_USER_ENV_VAR_1": "a",
+    "GH_CONTROL_USER_ENV_ANOTHER": "true"
+  }
+}

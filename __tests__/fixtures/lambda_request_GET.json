@@ -1,0 +1,7 @@
+{
+  "httpMethod": "GET",
+  "headers": {
+    "X-GitHub-Event": "pull_request"
+  },
+  "body": "{}"
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "id": "canva-page-2",
+    "description": "Description 2",
+    "url": "https://api.buildkite.com/v2/organizations/some-org/pipelines/canva-page-2",
+    "web_url": "https://buildkite.com/some-org/canva-page-2",
+    "name": "Canva Page 2",
+    "slug": "canva-page-2",
+    "repository": "git@github.com:some-org/some-repo.git",
+    "env": {
+      "GH_CONTROL_IS_VALID_BRANCH_BUILD": "true"
+    }
+  }
+]

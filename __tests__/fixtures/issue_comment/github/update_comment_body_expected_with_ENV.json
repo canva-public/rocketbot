@@ -1,0 +1,3 @@
+{
+  "body": "pls gib green ༼ つ ◕_◕ ༽つ via c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ff:\n* [some-pipeline-lite#95](https://buildkite.com/some-org/some-pipeline-lite/builds/95) scheduled at `2017-02-20T06:32:06.839Z`\n\nwith user-defined environment variables:\n```ini\nGH_CONTROL_USER_ENV_VAR_1=a\nGH_CONTROL_USER_ENV_ANOTHER=true\n```\n<details>\n<summary>Repeat this build</summary>\n\n````md\n:rocket:[some-pipeline-lite]\n\n```ini\nVAR_1=a\nANOTHER=true\n```\n````\n</details>\n"
+}

@@ -1,0 +1,108 @@
+{
+  "id": "3a84c75a-b284-479e-b9d4-d80a779de801",
+  "url": "https://api.buildkite.com/v2/organizations/some-org/pipelines/some-pipeline-lite/builds/95",
+  "web_url": "https://buildkite.com/some-org/some-pipeline-lite/builds/95",
+  "number": 95,
+  "state": "scheduled",
+  "message": "On-demand build for branch \"some-user/some-branch\" requested by @some-user from PR #9500",
+  "commit": "c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ff",
+  "branch": "some-user/some-branch",
+  "tag": null,
+  "env": {
+    "GH_CONTROL_BUILD": "true",
+    "GH_CONTROL_PR_NUMBER": "9500",
+    "GH_CONTROL_GITHUB_USER": "some-user",
+    "GH_CONTROL_GITHUB_USER_NAME": "Some User",
+    "GH_CONTROL_GITHUB_USER_EMAIL": "some-user@some-domain.com",
+    "GH_CONTROL_PR_TITLE": "test",
+    "GH_CONTROL_PR_BASE_BRANCH": "master",
+    "GH_CONTROL_PR_BASE_REPO": "some-org/some-repo"
+  },
+  "source": "api",
+  "creator": {
+    "id": "f4e3dc4c-1b6d-4566-96be-6aa27b10a921",
+    "name": "Canva Developers",
+    "email": "x@y.com",
+    "avatar_url": "https://www.gravatar.com/avatar/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "created_at": "2015-07-16T07:26:57.137Z"
+  },
+  "created_at": "2017-02-20T06:32:06.851Z",
+  "scheduled_at": "2017-02-20T06:32:06.839Z",
+  "started_at": null,
+  "finished_at": null,
+  "meta_data": {},
+  "pull_request": null,
+  "pipeline": {
+    "id": "dd4feabc-b09c-46ae-b9cb-06e034164919",
+    "url": "https://api.buildkite.com/v2/organizations/some-org/pipelines/some-pipeline-lite",
+    "web_url": "https://buildkite.com/some-org/some-pipeline-lite",
+    "name": "Some pipeline lite",
+    "slug": "some-pipeline-lite",
+    "repository": "git@github.com:some-org/some-repo.git",
+    "branch_configuration": null,
+    "provider": {
+      "id": "github",
+      "settings": {
+        "trigger_mode": "code",
+        "build_pull_requests": true,
+        "pull_request_branch_filter_enabled": false,
+        "skip_pull_request_builds_for_existing_commits": true,
+        "build_pull_request_forks": false,
+        "build_tags": false,
+        "publish_commit_status": true,
+        "publish_commit_status_per_step": true,
+        "repository": "some-org/some-repo",
+        "pull_request_branch_filter_configuration": ""
+      },
+      "webhook_url": "https://webhook.buildkite.com/deliver/7b804aeacf9500cb385a46e03ddb9baeed7c83d969a1d873c5"
+    },
+    "builds_url": "https://api.buildkite.com/v2/organizations/some-org/pipelines/some-pipeline-lite/builds",
+    "badge_url": "https://badge.buildkite.com/cd9a071e9fdee4f7828a8c354082d0da718659db37a3249a39.svg",
+    "created_at": "2017-01-24T01:19:39.999Z",
+    "steps": [
+      {
+        "type": "script",
+        "name": ":pipeline:",
+        "command": "buildkite-agent pipeline upload",
+        "artifact_paths": "",
+        "branch_configuration": "",
+        "env": {},
+        "timeout_in_minutes": null,
+        "agent_query_rules": ["queue=web-ci"],
+        "concurrency": null,
+        "parallelism": null
+      }
+    ],
+    "env": {
+      "GH_CONTROL_IS_VALID_BRANCH_BUILD": "true"
+    },
+    "scheduled_builds_count": 0,
+    "running_builds_count": 0,
+    "scheduled_jobs_count": 0,
+    "running_jobs_count": 9,
+    "waiting_jobs_count": 0
+  },
+  "jobs": [
+    {
+      "id": "c4b74b12-0019-4fcf-94a0-5b9af4274db9",
+      "type": "script",
+      "name": ":pipeline:",
+      "agent_query_rules": ["queue=web-ci"],
+      "state": "scheduled",
+      "build_url": "https://api.buildkite.com/v2/organizations/some-org/pipelines/some-pipeline-lite/builds/95",
+      "web_url": "https://buildkite.com/some-org/some-pipeline-lite/builds/95#c4b74b12-0019-4fcf-94a0-5b9af4274db9",
+      "log_url": "https://api.buildkite.com/v2/organizations/some-org/pipelines/some-pipeline-lite/builds/95/jobs/c4b74b12-0019-4fcf-94a0-5b9af4274db9/log",
+      "raw_log_url": "https://api.buildkite.com/v2/organizations/some-org/pipelines/some-pipeline-lite/builds/95/jobs/c4b74b12-0019-4fcf-94a0-5b9af4274db9/log.txt",
+      "artifacts_url": "https://api.buildkite.com/v2/organizations/some-org/pipelines/some-pipeline-lite/builds/95/jobs/c4b74b12-0019-4fcf-94a0-5b9af4274db9/artifacts",
+      "command": "buildkite-agent pipeline upload",
+      "exit_status": null,
+      "artifact_paths": "",
+      "agent": null,
+      "created_at": "2017-02-20T06:32:06.878Z",
+      "scheduled_at": "2017-02-20T06:32:06.856Z",
+      "started_at": null,
+      "finished_at": null,
+      "retries_count": null
+    }
+  ]
+}

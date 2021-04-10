@@ -1,0 +1,18 @@
+{
+  "name": "README.md",
+  "path": "README.md",
+  "sha": "c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ff",
+  "size": 2149,
+  "url": "https://api.github.com/repos/some-org/some-repo/contents/README.md?ref=master",
+  "html_url": "https://github.com/some-org/some-repo/blob/master/README.md",
+  "git_url": "https://api.github.com/repos/some-org/some-repo/git/blobs/c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ff",
+  "download_url": "https://raw.githubusercontent.com/some-org/some-repo/master/README.md?token=TOKEN",
+  "type": "file",
+  "content": "dGVzdCBjb250ZW50\n",
+  "encoding": "base64",
+  "_links": {
+    "self": "https://api.github.com/repos/some-org/some-repo/contents/README.md?ref=master",
+    "git": "https://api.github.com/repos/some-org/some-repo/git/blobs/c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ff",
+    "html": "https://github.com/some-org/some-repo/blob/master/README.md"
+  }
+}

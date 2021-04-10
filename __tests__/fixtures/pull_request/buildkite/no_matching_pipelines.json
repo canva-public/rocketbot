@@ -1,0 +1,22 @@
+[
+  {
+    "id": "should-not-show-because-of-missing-env",
+    "url": "https://api.buildkite.com/v2/organizations/some-org/pipelines/should-not-show-because-of-missing-env",
+    "web_url": "https://buildkite.com/some-org/a",
+    "name": "Should not show because gh-control env is missing",
+    "slug": "should-not-show-because-of-missing-env",
+    "repository": "git@github.com:some-org/some-repo.git",
+    "env": {}
+  },
+  {
+    "id": "should-not-show-because-of-wrong-repo",
+    "url": "https://api.buildkite.com/v2/organizations/some-org/pipelines/should-not-show-because-of-wrong-repo",
+    "web_url": "https://buildkite.com/some-org/should-not-show-because-of-wrong-repo",
+    "name": "Should not show because of wrong repository",
+    "slug": "should-not-show-because-of-wrong-repo",
+    "repository": "git@github.com:Canva/infrastructure.git",
+    "env": {
+      "GH_CONTROL_IS_VALID_BRANCH_BUILD": "true"
+    }
+  }
+]
