@@ -1,5 +1,7 @@
 # github-control
 
+![build](https://github.com/Canva/rocketbot-public/actions/workflows/node.js.yml/badge.svg)
+
 > Welcome to the :star2: world of :boom: :notes: :palm_tree: :shipit:
 
 This package contains the code for our github comment custom PR build bot.
