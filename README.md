@@ -1,4 +1,4 @@
-# Rocketbot
+# 🚀🤖 Rocketbot
 
 ![build](https://github.com/Canva/rocketbot-public/actions/workflows/node.js.yml/badge.svg)
 
