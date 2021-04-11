@@ -1,4 +1,5 @@
+.DS_Store
+/.eslintcache
 /coverage
 /coverage-report.tar.gz
 /node_modules
-.DS_Store
