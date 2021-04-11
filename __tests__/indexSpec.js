@@ -1,5 +1,5 @@
 const nock = require('nock');
-const assert = require('assert');
+const path = require('path');
 
 process.env.BUILDKITE_TOKEN = process.env.BUILDKITE_TOKEN || '__bk-token';
 process.env.BUILDKITE_ORG_NAME = process.env.BUILDKITE_ORG_NAME || 'some-org';
@@ -11,65 +11,88 @@ const githubControl = require('..');
 // Enable this to record HTTP requests when adding a new test
 // nock.recorder.rec();
 
+function loadFixture(fixturePath) {
+  // eslint-disable-next-line global-require, import/no-dynamic-require
+  return require(path.join(__dirname, 'fixtures', fixturePath));
+}
+
 function assertLambdaResponse(response, expectedStatus, expectedBody) {
-  assert.strictEqual(+response.statusCode, expectedStatus);
-  assert.deepStrictEqual(JSON.parse(response.body), expectedBody);
+  expect(+response.statusCode).toStrictEqual(expectedStatus);
+  expect(JSON.parse(response.body)).toStrictEqual(expectedBody);
 }
 
 function assertNockDone() {
-  assert(nock.isDone(), `pending mocks: ${nock.pendingMocks()}`);
+  if (!nock.isDone()) {
+    // eslint-disable-next-line no-console
+    console.error(`pending mocks: ${nock.pendingMocks()}`);
+  }
+  expect(nock.isDone()).toBe(true);
 }
 
 describe('github-control', () => {
   describe('general', () => {
     describe('comment matching', () => {
       it('should match a simple comment', () => {
-        assert(githubControl.isTriggerComment(':rocket:[x-build]'));
+        expect.hasAssertions();
+        expect(githubControl.isTriggerComment(':rocket:[x-build]')).toBe(true);
       });
       it('should match a comment with the emoji', () => {
-        assert(githubControl.isTriggerComment('🚀[x-build]'));
+        expect.hasAssertions();
+        expect(githubControl.isTriggerComment('🚀[x-build]')).toBe(true);
       });
       it('should match a comment with lots of whitespace', () => {
-        assert(
+        expect.hasAssertions();
+        expect(
           githubControl.isTriggerComment(
             '    :rocket:      [    x-build    ]     ',
           ),
-        );
+        ).toBe(true);
       });
       it('should match a comment that is quoted', () => {
-        assert(githubControl.isTriggerComment('> :rocket:[x-build]\n\n'));
-      });
-      it('should match a comment that is quoted and has leading whitespace', () => {
-        assert(githubControl.isTriggerComment('      > :rocket:[x-build]\n\n'));
-      });
-      it('should match a comment that has multiple pipelines', () => {
-        assert(
-          githubControl.isTriggerComment('> :rocket:[x-build][y-build]\n\n'),
+        expect.hasAssertions();
+        expect(githubControl.isTriggerComment('> :rocket:[x-build]\n\n')).toBe(
+          true,
         );
       });
+      it('should match a comment that is quoted and has leading whitespace', () => {
+        expect.hasAssertions();
+        expect(
+          githubControl.isTriggerComment('      > :rocket:[x-build]\n\n'),
+        ).toBe(true);
+      });
+      it('should match a comment that has multiple pipelines', () => {
+        expect.hasAssertions();
+        expect(
+          githubControl.isTriggerComment('> :rocket:[x-build][y-build]\n\n'),
+        ).toBe(true);
+      });
       it('should match a comment that has multiple pipelines with whitespace', () => {
-        assert(
+        expect.hasAssertions();
+        expect(
           githubControl.isTriggerComment(
             '> :rocket:[x-build]    [y-build]\n\n',
           ),
-        );
+        ).toBe(true);
       });
       it('should match a comment that has multiple rockets', () => {
-        assert(
+        expect.hasAssertions();
+        expect(
           githubControl.isTriggerComment(
             ':rocket:[x-build]\n    :rocket:[y-build]\n\n',
           ),
-        );
+        ).toBe(true);
       });
       it('should match a comment that is quoted and has multiple rockets', () => {
-        assert(
+        expect.hasAssertions();
+        expect(
           githubControl.isTriggerComment(
             '> :rocket:[x-build][z-build]\n\n    > :rocket:[y-build]\n\n',
           ),
-        );
+        ).toBe(true);
       });
       describe('env vars', () => {
         it('should match a comment with env vars', () => {
+          expect.hasAssertions();
           const markdown = `
           :rocket:[x-build]
           \`\`\`ini
@@ -83,117 +106,120 @@ describe('github-control', () => {
           some-forbidden.chars=x
           \`\`\`
 `;
-          assert(githubControl.isTriggerComment(markdown));
+          expect(githubControl.isTriggerComment(markdown)).toBe(true);
         });
 
         it('should match a comment with empty env vars', () => {
+          expect.hasAssertions();
           const markdown = `
           :rocket:[x-build]
           \`\`\`ini
           \`\`\`
 `;
-          assert(githubControl.isTriggerComment(markdown));
+          expect(githubControl.isTriggerComment(markdown)).toBe(true);
         });
 
         it('should match a comment with env vars that have no highlighting', () => {
+          expect.hasAssertions();
           const markdown = `
           :rocket:[x-build]
           \`\`\`
           A=a
           \`\`\`
 `;
-          assert(githubControl.isTriggerComment(markdown));
+          expect(githubControl.isTriggerComment(markdown)).toBe(true);
         });
       });
     });
 
     describe('comment parsing', () => {
       it('should be possible for simple comments', () => {
-        assert.deepStrictEqual(
+        expect.hasAssertions();
+        expect(
           githubControl.parseTriggerComment(':rocket:[x-build]').buildNames,
-          ['x-build'],
-        );
+        ).toStrictEqual(['x-build']);
       });
       it('should be possible for simple comments wrapped in ` characters', () => {
-        assert.deepStrictEqual(
+        expect.hasAssertions();
+        expect(
           githubControl.parseTriggerComment('> `:rocket:[x-build]`').buildNames,
-          ['x-build'],
-        );
+        ).toStrictEqual(['x-build']);
       });
       it('should be possible for comments with emoji', () => {
-        assert.deepStrictEqual(
+        expect.hasAssertions();
+        expect(
           githubControl.parseTriggerComment('🚀[x-build]').buildNames,
-          ['x-build'],
-        );
+        ).toStrictEqual(['x-build']);
       });
       it('should be possible for comments with lots of whitespace', () => {
-        assert.deepStrictEqual(
+        expect.hasAssertions();
+        expect(
           githubControl.parseTriggerComment(
             '    :rocket:      [    x-build    ]     ',
           ).buildNames,
-          ['x-build'],
-        );
+        ).toStrictEqual(['x-build']);
       });
       it('should be possible for comments with lots of whitespace wrapped in ` characters', () => {
-        assert.deepStrictEqual(
+        expect.hasAssertions();
+        expect(
           githubControl.parseTriggerComment(
             '    `  :rocket:      [    x-build    ]    `  ',
           ).buildNames,
-          ['x-build'],
-        );
+        ).toStrictEqual(['x-build']);
       });
       it('should be possible for comments with multiple builds', () => {
-        assert.deepStrictEqual(
+        expect.hasAssertions();
+        expect(
           githubControl.parseTriggerComment(':rocket:[x-build][y-build]')
             .buildNames,
-          ['x-build', 'y-build'],
-        );
+        ).toStrictEqual(['x-build', 'y-build']);
       });
       it('should be possible for comments with multiple builds that have whitespace', () => {
-        assert.deepStrictEqual(
+        expect.hasAssertions();
+        expect(
           githubControl.parseTriggerComment(
             ':rocket:  [x-build]       [y-build]    ',
           ).buildNames,
-          ['x-build', 'y-build'],
-        );
+        ).toStrictEqual(['x-build', 'y-build']);
       });
       it('should be possible for comments with multiple rockets on separate lines', () => {
+        expect.hasAssertions();
         const markdown = `
           :rocket:[x-build][y-build]
           :rocket:[z-build]
 `;
-        assert.deepStrictEqual(
+        expect(
           githubControl.parseTriggerComment(markdown).buildNames,
-          ['x-build', 'y-build', 'z-build'],
-        );
+        ).toStrictEqual(['x-build', 'y-build', 'z-build']);
       });
 
       it('should be possible for quoted comments with multiple rockets on separate lines', () => {
+        expect.hasAssertions();
         const markdown = `
           > :rocket:[x-build][y-build]
 
           > :rocket:[z-build]
 `;
-        assert.deepStrictEqual(
+        expect(
           githubControl.parseTriggerComment(markdown).buildNames,
-          ['x-build', 'y-build', 'z-build'],
-        );
+        ).toStrictEqual(['x-build', 'y-build', 'z-build']);
       });
 
       it('should be possible for quoted comments with multiple rockets on separate lines wrapped with ` chracter', () => {
+        expect.hasAssertions();
         const markdown = `
               > \`:rocket:[x-build][y-build]\`
     
               > \`:rocket:[z-build]\`
 `;
-        assert.deepStrictEqual(
+        expect(
           githubControl.parseTriggerComment(markdown).buildNames,
-          ['x-build', 'y-build', 'z-build'],
-        );
+        ).toStrictEqual(['x-build', 'y-build', 'z-build']);
       });
 
       describe('env vars', () => {
         it('should be parsed properly', () => {
+          expect.hasAssertions();
           const markdown = `
           :rocket:[x-build]
           \`\`\`ini
@@ -225,13 +251,13 @@ describe('github-control', () => {
             },
           };
 
-          assert.deepStrictEqual(
-            githubControl.parseTriggerComment(markdown),
+          expect(githubControl.parseTriggerComment(markdown)).toStrictEqual(
             expected,
           );
         });
 
         it('should be able to deal with an empty block', () => {
+          expect.hasAssertions();
           const markdown = `
           :rocket:[x-build]
           \`\`\`ini
@@ -242,13 +268,13 @@ describe('github-control', () => {
             env: {},
           };
 
-          assert.deepStrictEqual(
-            githubControl.parseTriggerComment(markdown),
+          expect(githubControl.parseTriggerComment(markdown)).toStrictEqual(
             expected,
           );
         });
 
         it('should be able to deal with a non-highlighted block', () => {
+          expect.hasAssertions();
           const markdown = `
           :rocket:[x-build]
           \`\`\`
@@ -262,8 +288,7 @@ describe('github-control', () => {
             },
           };
 
-          assert.deepStrictEqual(
-            githubControl.parseTriggerComment(markdown),
+          expect(githubControl.parseTriggerComment(markdown)).toStrictEqual(
             expected,
           );
         });
@@ -280,9 +305,10 @@ describe('github-control', () => {
       nock.cleanAll();
     });
 
-    it('should ignore anything that is not a POST', () => {
-      const lambdaRequest = require('./fixtures/lambda_request_GET');
-      return githubControl.handler(lambdaRequest, null, (err, res) => {
+    it('should ignore anything that is not a POST', async () => {
+      expect.hasAssertions();
+      const lambdaRequest = loadFixture('lambda_request_GET');
+      await githubControl.handler(lambdaRequest, null, (err, res) => {
         if (err) {
           throw err;
         }
@@ -292,9 +318,10 @@ describe('github-control', () => {
       });
     });
 
-    it('should ignore unsupported github events', () => {
-      const lambdaRequest = require('./fixtures/commit_comment/lambda_request');
-      return githubControl.handler(lambdaRequest, null, (err, res) => {
+    it('should ignore unsupported github events', async () => {
+      expect.hasAssertions();
+      const lambdaRequest = loadFixture('commit_comment/lambda_request');
+      await githubControl.handler(lambdaRequest, null, (err, res) => {
         if (err) {
           throw err;
         }
@@ -304,8 +331,9 @@ describe('github-control', () => {
       });
     });
 
-    it('should gracefully handle non-JSON requests', () => {
-      const lambdaRequest = require('./fixtures/lambda_request_no_JSON');
+    it('should gracefully handle non-JSON requests', async () => {
+      expect.hasAssertions();
+      const lambdaRequest = loadFixture('lambda_request_no_JSON');
 
       // The error messages differ in different node versions (e.g. 4.3.2 vs. 7.5.0)
       let errorMessage;
@@ -315,7 +343,7 @@ describe('github-control', () => {
         errorMessage = e.message;
       }
 
-      return githubControl.handler(lambdaRequest, null, (err, res) => {
+      await githubControl.handler(lambdaRequest, null, (err, res) => {
         if (err) {
           throw err;
         }
@@ -325,14 +353,15 @@ describe('github-control', () => {
       });
     });
 
-    it('should gracefully handle a failing buildkite request', () => {
-      const lambdaRequest = require('./fixtures/pull_request/lambda_request');
+    it('should gracefully handle a failing buildkite request', async () => {
+      expect.hasAssertions();
+      const lambdaRequest = loadFixture('pull_request/lambda_request');
 
       nock('https://api.buildkite.com:443')
         .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
         .reply(401, { message: 'Authorization failed' });
 
-      return githubControl.handler(lambdaRequest, null, (err, res) => {
+      await githubControl.handler(lambdaRequest, null, (err, res) => {
         if (err) {
           throw err;
         }
@@ -343,9 +372,10 @@ describe('github-control', () => {
       });
     });
 
-    it('should gracefully handle a failing github request', () => {
-      const lambdaRequest = require('./fixtures/pull_request/lambda_request');
-      const pipelinesReply = require('./fixtures/pull_request/buildkite/pipelines');
+    it('should gracefully handle a failing github request', async () => {
+      expect.hasAssertions();
+      const lambdaRequest = loadFixture('pull_request/lambda_request');
+      const pipelinesReply = loadFixture('pull_request/buildkite/pipelines');
 
       nock('https://api.buildkite.com:443')
         .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
@@ -373,7 +403,7 @@ describe('github-control', () => {
           documentation_url: 'https://developer.github.com/v3',
         });
 
-      return githubControl.handler(lambdaRequest, null, (err, res) => {
+      await githubControl.handler(lambdaRequest, null, (err, res) => {
         if (err) {
           throw err;
         }
@@ -384,8 +414,9 @@ describe('github-control', () => {
       });
     });
 
-    it('should gracefully handle non-JSON responses', () => {
-      const lambdaRequest = require('./fixtures/pull_request/lambda_request');
+    it('should gracefully handle non-JSON responses', async () => {
+      expect.hasAssertions();
+      const lambdaRequest = loadFixture('pull_request/lambda_request');
 
       nock('https://api.buildkite.com:443')
         .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
@@ -393,7 +424,7 @@ describe('github-control', () => {
           'Content-Type': 'text/plain',
         });
 
-      return githubControl.handler(lambdaRequest, null, (err, res) => {
+      await githubControl.handler(lambdaRequest, null, (err, res) => {
         if (err) {
           throw err;
         }
@@ -405,8 +436,11 @@ describe('github-control', () => {
       });
     });
 
-    it('should gracefully handle broken JSON responses', () => {
-      const lambdaRequest = require('./fixtures/pull_request_review_comment/lambda_request');
+    it('should gracefully handle broken JSON responses', async () => {
+      expect.hasAssertions();
+      const lambdaRequest = loadFixture(
+        'pull_request_review_comment/lambda_request',
+      );
 
       const body = 'This is no JSON';
 
@@ -424,7 +458,7 @@ describe('github-control', () => {
           'Content-Type': 'application/json',
         });
 
-      return githubControl.handler(lambdaRequest, null, (err, res) => {
+      await githubControl.handler(lambdaRequest, null, (err, res) => {
         if (err) {
           throw err;
         }
@@ -436,9 +470,10 @@ describe('github-control', () => {
     });
 
     describe('ping', () => {
-      it('should properly handle a ping', () => {
-        const lambdaRequest = require('./fixtures/ping/lambda_request');
-        return githubControl.handler(lambdaRequest, null, (err, res) => {
+      it('should properly handle a ping', async () => {
+        expect.hasAssertions();
+        const lambdaRequest = loadFixture('ping/lambda_request');
+        await githubControl.handler(lambdaRequest, null, (err, res) => {
           if (err) {
             throw err;
           }
@@ -451,9 +486,10 @@ describe('github-control', () => {
         });
       });
 
-      it('should complain if the events set up are not enough', () => {
-        const lambdaRequest = require('./fixtures/ping/lambda_request_no_events');
-        return githubControl.handler(lambdaRequest, null, (err, res) => {
+      it('should complain if the events set up are not enough', async () => {
+        expect.hasAssertions();
+        const lambdaRequest = loadFixture('ping/lambda_request_no_events');
+        await githubControl.handler(lambdaRequest, null, (err, res) => {
           if (err) {
             throw err;
           }
@@ -465,9 +501,10 @@ describe('github-control', () => {
     });
 
     describe('pull_request', () => {
-      it('should ignore when pull requests change state except when they are opened', () => {
-        const lambdaRequest = require('./fixtures/pull_request/lambda_pr_assigned');
-        return githubControl.handler(lambdaRequest, null, (err, res) => {
+      it('should ignore when pull requests change state except when they are opened', async () => {
+        expect.hasAssertions();
+        const lambdaRequest = loadFixture('pull_request/lambda_pr_assigned');
+        await githubControl.handler(lambdaRequest, null, (err, res) => {
           if (err) {
             throw err;
           }
@@ -478,15 +515,18 @@ describe('github-control', () => {
         });
       });
 
-      it('should not post a comment to github about the usage when no pipelines match', () => {
-        const lambdaRequest = require('./fixtures/pull_request/lambda_request');
-        const pipelinesReply = require('./fixtures/pull_request/buildkite/no_matching_pipelines');
+      it('should not post a comment to github about the usage when no pipelines match', async () => {
+        expect.hasAssertions();
+        const lambdaRequest = loadFixture('pull_request/lambda_request');
+        const pipelinesReply = loadFixture(
+          'pull_request/buildkite/no_matching_pipelines',
+        );
 
         nock('https://api.buildkite.com:443')
           .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
           .reply(200, pipelinesReply);
 
-        return githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, null, (err, res) => {
           if (err) {
             throw err;
           }
@@ -499,13 +539,22 @@ describe('github-control', () => {
         });
       });
 
-      it('should post a comment to github about the usage when a pull request is opened', () => {
-        const lambdaRequest = require('./fixtures/pull_request/lambda_request');
-        const pipelinesReply = require('./fixtures/pull_request/buildkite/pipelines');
-        const createdCommentReply = require('./fixtures/pull_request/github/comment_create');
-        const expectedCommentCreationBody = require('./fixtures/pull_request/github/comment_create_body_expected');
-        const docSomePipelineLite = require('./fixtures/pull_request/github/doc_some_pipeline_lite');
-        const docSomePipeline = require('./fixtures/pull_request/github/doc_some_pipeline');
+      it('should post a comment to github about the usage when a pull request is opened', async () => {
+        expect.hasAssertions();
+        const lambdaRequest = loadFixture('pull_request/lambda_request');
+        const pipelinesReply = loadFixture('pull_request/buildkite/pipelines');
+        const createdCommentReply = loadFixture(
+          'pull_request/github/comment_create',
+        );
+        const expectedCommentCreationBody = loadFixture(
+          'pull_request/github/comment_create_body_expected',
+        );
+        const docSomePipelineLite = loadFixture(
+          'pull_request/github/doc_some_pipeline_lite',
+        );
+        const docSomePipeline = loadFixture(
+          'pull_request/github/doc_some_pipeline',
+        );
 
         nock('https://api.buildkite.com:443')
           .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
@@ -534,7 +583,7 @@ describe('github-control', () => {
           )
           .reply(404, docSomePipeline);
 
-        return githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, null, (err, res) => {
           if (err) {
             throw err;
           }
@@ -549,10 +598,13 @@ describe('github-control', () => {
         });
       });
 
-      it('should page when there are more pages', () => {
-        const lambdaRequest = require('./fixtures/pull_request/lambda_request');
-        const pipelinesReply = require('./fixtures/pull_request/buildkite/pipelines');
-        const pipelinesReplyPage2 = require('./fixtures/pull_request/buildkite/pipelines_page2');
+      it('should page when there are more pages', async () => {
+        expect.hasAssertions();
+        const lambdaRequest = loadFixture('pull_request/lambda_request');
+        const pipelinesReply = loadFixture('pull_request/buildkite/pipelines');
+        const pipelinesReplyPage2 = loadFixture(
+          'pull_request/buildkite/pipelines_page2',
+        );
 
         nock('https://api.buildkite.com:443')
           .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
@@ -565,7 +617,7 @@ describe('github-control', () => {
           .get('/v2/organizations/some-org/pipelines?page=2&per_page=100')
           .reply(200, pipelinesReplyPage2);
 
-        return githubControl.handler(lambdaRequest, null, (err) => {
+        await githubControl.handler(lambdaRequest, null, (err) => {
           if (err) {
             throw err;
           }
@@ -575,14 +627,25 @@ describe('github-control', () => {
     });
 
     describe('issue_comment', () => {
-      it('should start a build when an issue comment requests it', () => {
-        const lambdaRequest = require('./fixtures/issue_comment/lambda_request');
-        const usersReply = require('./fixtures/github/users_some-user');
-        const pullRequestReply = require('./fixtures/issue_comment/github/pull_request');
-        const buildkiteCreateBuildReply = require('./fixtures/issue_comment/buildkite/create_build');
-        const expectedBuildkiteCreateBody = require('./fixtures/issue_comment/buildkite/create_build_body_expected');
-        const updateCommentReply = require('./fixtures/issue_comment/github/update_comment');
-        const expectedGithubUpdateCommentBody = require('./fixtures/issue_comment/github/update_comment_body_expected');
+      it('should start a build when an issue comment requests it', async () => {
+        expect.hasAssertions();
+        const lambdaRequest = loadFixture('issue_comment/lambda_request');
+        const usersReply = loadFixture('github/users_some-user');
+        const pullRequestReply = loadFixture(
+          'issue_comment/github/pull_request',
+        );
+        const buildkiteCreateBuildReply = loadFixture(
+          'issue_comment/buildkite/create_build',
+        );
+        const expectedBuildkiteCreateBody = loadFixture(
+          'issue_comment/buildkite/create_build_body_expected',
+        );
+        const updateCommentReply = loadFixture(
+          'issue_comment/github/update_comment',
+        );
+        const expectedGithubUpdateCommentBody = loadFixture(
+          'issue_comment/github/update_comment_body_expected',
+        );
 
         nock('https://api.github.com:443')
           .get('/users/some-user')
@@ -606,7 +669,7 @@ describe('github-control', () => {
           )
           .reply(200, updateCommentReply);
 
-        return githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, null, (err, res) => {
           if (err) {
             throw err;
           }
@@ -621,15 +684,30 @@ describe('github-control', () => {
         });
       });
 
-      it('should start multiple builds when an issue comment requests it', () => {
-        const lambdaRequestMultiBuild = require('./fixtures/issue_comment/lambda_request_multi_build');
-        const usersReply = require('./fixtures/github/users_some-user');
-        const pullRequestReply = require('./fixtures/issue_comment/github/pull_request');
-        const buildkiteCreateBuildReply = require('./fixtures/issue_comment/buildkite/create_build');
-        const buildkiteCreateBuildReplyOther = require('./fixtures/issue_comment/buildkite/create_build_other');
-        const expectedBuildkiteCreateBody = require('./fixtures/issue_comment/buildkite/create_build_body_expected');
-        const updateCommentReply = require('./fixtures/issue_comment/github/update_comment');
-        const expectedGithubUpdateCommentBodyMultiple = require('./fixtures/issue_comment/github/update_comment_body_expected_multiple');
+      it('should start multiple builds when an issue comment requests it', async () => {
+        expect.hasAssertions();
+        const lambdaRequestMultiBuild = loadFixture(
+          'issue_comment/lambda_request_multi_build',
+        );
+        const usersReply = loadFixture('github/users_some-user');
+        const pullRequestReply = loadFixture(
+          'issue_comment/github/pull_request',
+        );
+        const buildkiteCreateBuildReply = loadFixture(
+          'issue_comment/buildkite/create_build',
+        );
+        const buildkiteCreateBuildReplyOther = loadFixture(
+          'issue_comment/buildkite/create_build_other',
+        );
+        const expectedBuildkiteCreateBody = loadFixture(
+          'issue_comment/buildkite/create_build_body_expected',
+        );
+        const updateCommentReply = loadFixture(
+          'issue_comment/github/update_comment',
+        );
+        const expectedGithubUpdateCommentBodyMultiple = loadFixture(
+          'issue_comment/github/update_comment_body_expected_multiple',
+        );
 
         nock('https://api.github.com:443')
           .get('/users/some-user')
@@ -660,7 +738,7 @@ describe('github-control', () => {
           )
           .reply(200, updateCommentReply);
 
-        return githubControl.handler(
+        await githubControl.handler(
           lambdaRequestMultiBuild,
           null,
           (err, res) => {
@@ -679,14 +757,27 @@ describe('github-control', () => {
         );
       });
 
-      it('should start a build with environment variables when an issue comment requests it', () => {
-        const lambdaRequest = require('./fixtures/issue_comment/lambda_request_with_ENV');
-        const usersReply = require('./fixtures/github/users_some-user');
-        const pullRequestReply = require('./fixtures/issue_comment/github/pull_request');
-        const buildkiteCreateBuildReply = require('./fixtures/issue_comment/buildkite/create_build');
-        const expectedBuildkiteCreateBody = require('./fixtures/issue_comment/buildkite/create_build_body_expected_with_ENV');
-        const updateCommentReply = require('./fixtures/issue_comment/github/update_comment_with_ENV');
-        const expectedGithubUpdateCommentBody = require('./fixtures/issue_comment/github/update_comment_body_expected_with_ENV');
+      it('should start a build with environment variables when an issue comment requests it', async () => {
+        expect.hasAssertions();
+        const lambdaRequest = loadFixture(
+          'issue_comment/lambda_request_with_ENV',
+        );
+        const usersReply = loadFixture('github/users_some-user');
+        const pullRequestReply = loadFixture(
+          'issue_comment/github/pull_request',
+        );
+        const buildkiteCreateBuildReply = loadFixture(
+          'issue_comment/buildkite/create_build',
+        );
+        const expectedBuildkiteCreateBody = loadFixture(
+          'issue_comment/buildkite/create_build_body_expected_with_ENV',
+        );
+        const updateCommentReply = loadFixture(
+          'issue_comment/github/update_comment_with_ENV',
+        );
+        const expectedGithubUpdateCommentBody = loadFixture(
+          'issue_comment/github/update_comment_body_expected_with_ENV',
+        );
 
         nock('https://api.github.com:443')
           .get('/users/some-user')
@@ -710,7 +801,7 @@ describe('github-control', () => {
           )
           .reply(200, updateCommentReply);
 
-        return githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, null, (err, res) => {
           if (err) {
             throw err;
           }
@@ -725,11 +816,14 @@ describe('github-control', () => {
         });
       });
 
-      it('should ignore bot comments', () => {
+      it('should ignore bot comments', async () => {
+        expect.hasAssertions();
         // The user in this mock request must match the bot user above
-        const lambdaRequest = require('./fixtures/issue_comment/lambda_request_by_bot');
+        const lambdaRequest = loadFixture(
+          'issue_comment/lambda_request_by_bot',
+        );
 
-        return githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, null, (err, res) => {
           if (err) {
             throw err;
           }
@@ -741,10 +835,13 @@ describe('github-control', () => {
         });
       });
 
-      it('should ignore deleted comments', () => {
-        const lambdaRequest = require('./fixtures/issue_comment/lambda_request_comment_deleted');
+      it('should ignore deleted comments', async () => {
+        expect.hasAssertions();
+        const lambdaRequest = loadFixture(
+          'issue_comment/lambda_request_comment_deleted',
+        );
 
-        return githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, null, (err, res) => {
           if (err) {
             throw err;
           }
@@ -756,10 +853,11 @@ describe('github-control', () => {
         });
       });
 
-      it('should ignore comments not attached to pull requests', () => {
-        const lambdaRequest = require('./fixtures/issue_comment/lambda_request_no_pr');
+      it('should ignore comments not attached to pull requests', async () => {
+        expect.hasAssertions();
+        const lambdaRequest = loadFixture('issue_comment/lambda_request_no_pr');
 
-        return githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, null, (err, res) => {
           if (err) {
             throw err;
           }
@@ -773,13 +871,24 @@ describe('github-control', () => {
     });
 
     describe('pull_request_review_comment', () => {
-      it('should start a build when a pull request review comment requests it', () => {
-        const lambdaRequest = require('./fixtures/pull_request_review_comment/lambda_request');
-        const usersReply = require('./fixtures/github/users_some-user');
-        const buildkiteCreateBuildReply = require('./fixtures/pull_request_review_comment/buildkite/create_build');
-        const buildkiteCreateBuildExpectedBody = require('./fixtures/pull_request_review_comment/buildkite/create_build_body_expected');
-        const updateCommentReply = require('./fixtures/pull_request_review_comment/github/update_comment');
-        const expectedGuithubUpdateCommentBody = require('./fixtures/pull_request_review_comment/github/update_comment_body_expected');
+      it('should start a build when a pull request review comment requests it', async () => {
+        expect.hasAssertions();
+        const lambdaRequest = loadFixture(
+          'pull_request_review_comment/lambda_request',
+        );
+        const usersReply = loadFixture('github/users_some-user');
+        const buildkiteCreateBuildReply = loadFixture(
+          'pull_request_review_comment/buildkite/create_build',
+        );
+        const buildkiteCreateBuildExpectedBody = loadFixture(
+          'pull_request_review_comment/buildkite/create_build_body_expected',
+        );
+        const updateCommentReply = loadFixture(
+          'pull_request_review_comment/github/update_comment',
+        );
+        const expectedGuithubUpdateCommentBody = loadFixture(
+          'pull_request_review_comment/github/update_comment_body_expected',
+        );
 
         nock('https://api.github.com:443')
           .get('/users/some-user')
@@ -799,7 +908,7 @@ describe('github-control', () => {
           )
           .reply(200, updateCommentReply);
 
-        return githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, null, (err, res) => {
           if (err) {
             throw err;
           }
@@ -814,10 +923,13 @@ describe('github-control', () => {
         });
       });
 
-      it('should ignore comments that do not contain a build marker', () => {
-        const lambdaRequest = require('./fixtures/pull_request_review_comment/lambda_request_random_comment');
+      it('should ignore comments that do not contain a build marker', async () => {
+        expect.hasAssertions();
+        const lambdaRequest = loadFixture(
+          'pull_request_review_comment/lambda_request_random_comment',
+        );
 
-        return githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, null, (err, res) => {
           if (err) {
             throw err;
           }
