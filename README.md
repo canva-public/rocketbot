@@ -1,12 +1,8 @@
-# github-control
+# Rocketbot
 
 ![build](https://github.com/Canva/rocketbot-public/actions/workflows/node.js.yml/badge.svg)
 
-> Welcome to the :star2: world of :boom: :notes: :palm_tree: :shipit:
-
-This package contains the code for our github comment custom PR build bot.
-
-It is based on a Lambda function that is invoked by a github webhook, for more information see the [readme in the infrastructure repository](https://github.com/some-org/infrastructure/tree/master/build/github-control).
+This lambda provides a bridge between github and Buildkite, allowing you to trigger a Buildkite build from a comment on a pull request on github.
 
 In its simplest form it can be used like this:
 
@@ -40,7 +36,7 @@ Note: `ini` behind the markdown code block is optional if you want to save a few
 
 ## Kicking off multiple builds in one command
 
-Since version 3.1.0 it is possible to kick off multiple builds with one command:
+Since version `3.1.0` it is possible to kick off multiple builds with one command:
 
 ```markdown
 :rocket:[buildkite-pipeline-slug][buildkite-pipeline-slug-2][buildkite-pipeline-slug-...][buildkite-pipeline-slug-n]
@@ -52,13 +48,13 @@ Since version 3.1.0 it is possible to kick off multiple builds with one command:
 
 ![Adding or viewing documentation for pipelines](./adding-viewing-documentation.png)
 
-Adding or viewing documentation for a pipeline can be achieved by clicking :heavy_plus_sign: or :information_source:, respectively. The default location for documentation is `https://github.com/${canva_repo}/blob/${pr_head_sha}/.buildkite/pipeline/description/${buildkite_org_slug}/${buildkite_pipeline_slug}.md`. This location can be overriden by defining the `GH_CONTROL_README_URL` environment variable of the pipeline you want to document. The value of the environment variable supports templating with the following variables:
+Adding or viewing documentation for a pipeline can be achieved by clicking :heavy_plus_sign: or :information_source:, respectively. The default location for documentation is `https://github.com/${repo_slug}/blob/${pr_head_sha}/.buildkite/pipeline/description/${buildkite_org_slug}/${buildkite_pipeline_slug}.md`. This location can be overridden by defining the `GH_CONTROL_README_URL` environment variable of the pipeline you want to document. The value of the environment variable supports templating with the following variables:
 
 - `COMMITISH`
 - `ORG`
 - `REPO`
 
-For example, setting `GH_CONTROL_README_URL=https://github.com/$ORG/$REPO/blob/$COMMITISH/web/README.md` would be equivalent to something like `GH_CONTROL_README_URL=https://github.com/some-org/some-repo/blob/17cfd0e17949a643efed1c2317c1c9f4204ddca3/web/README.md`.
+For example, setting `GH_CONTROL_README_URL=https://github.com/$ORG/$REPO/blob/$COMMITISH/path/to/README.md` would be equivalent to something like `GH_CONTROL_README_URL=https://github.com/some-org/some-repo/blob/c0ffee/path/to/README.md`.
 
 ## Development
 
