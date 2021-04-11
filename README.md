@@ -48,7 +48,7 @@ Since version 3.1.0 it is possible to kick off multiple builds with one command:
 
 `github-control` leaves a comment on PRs similar to the following:
 
-![Adding or viewing documentation for pipelines](/tools/github-control/adding-viewing-documentation.png)
+![Adding or viewing documentation for pipelines](./adding-viewing-documentation.png)
 
 Adding or viewing documentation for a pipeline can be achieved by clicking :heavy_plus_sign: or :information_source:, respectively. The default location for documentation is `https://github.com/${canva_repo}/blob/${pr_head_sha}/.buildkite/pipeline/description/${buildkite_org_slug}/${buildkite_pipeline_slug}.md`. This location can be overriden by defining the `GH_CONTROL_README_URL` environment variable of the pipeline you want to document. The value of the environment variable supports templating with the following variables:
 
@@ -60,23 +60,15 @@ For example, setting `GH_CONTROL_README_URL=https://github.com/$ORG/$REPO/blob/$
 
 ## Development
 
-You need to run this with the version of node that Lambda supports. At the moment this is `10.x`, so you need to get a node version manager, e.g.:
+You need to run this with the version of node that Lambda supports. At the moment this is `12.x` and `14.x`, so you need to get a node version manager, e.g.:
 
 ```bash
 yarn global add n
-n 10
+n 12
 ```
 
 and then you can run the tests as usual with `yarn test` or kick them in watch mode via `yarn test:watch`.
 
 ### Debugging hints
 
-Use `DEBUG=nock* yarn test:watch` and `.only` in the tests to see output and assertions from nock.
-
-### Inception :red_car: :bridge_at_night:
-
-Once you open a pull request, you can run a build that runs the test suite and produces a release artifact via:
-
-```markdown
-:rocket:[infra-deploy-github-control]
-```
+Use `ENABLE_DEBUG=true DEBUG=nock.* yarn test:watch` and `.only` in the tests to see output and assertions from nock.
