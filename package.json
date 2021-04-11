@@ -8,7 +8,7 @@
     "prettier": "prettier --write .",
     "pretest": "prettier --check . && yarn eslint",
     "test": "jest --ci --coverage",
-    "test:watch": "jest --watch",
+    "test:watch": "jest --watch --notify",
     "prepare": "husky install"
   },
   "repository": {
