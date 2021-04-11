@@ -42,6 +42,17 @@ Since version `3.1.0` it is possible to kick off multiple builds with one comman
 :rocket:[buildkite-pipeline-slug][buildkite-pipeline-slug-2][buildkite-pipeline-slug-...][buildkite-pipeline-slug-n]
 ```
 
+or:
+
+```markdown
+:rocket:[buildkite-pipeline-slug]
+:rocket:[buildkite-pipeline-slug-2]
+:rocket:[buildkite-pipeline-slug-...]
+:rocket:[buildkite-pipeline-slug-n]
+```
+
+or any combination thereof.
+
 ## Adding or viewing documentation for pipelines
 
 `github-control` leaves a comment on PRs similar to the following:
