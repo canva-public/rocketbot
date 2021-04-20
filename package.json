@@ -13,7 +13,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/Canva/rocketbot-public.git"
+    "url": "git+ssh://git@github.com/canva-public/rocketbot.git"
   },
   "keywords": [
     "lambda",
