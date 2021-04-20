@@ -1,6 +1,6 @@
 # 🚀🤖 Rocketbot
 
-![build](https://github.com/Canva/rocketbot-public/actions/workflows/node.js.yml/badge.svg)
+![build](https://github.com/canva-public/rocketbot/actions/workflows/node.js.yml/badge.svg)
 
 This lambda provides a bridge between github and Buildkite, allowing you to trigger a Buildkite build from a comment on a pull request on github.
 
