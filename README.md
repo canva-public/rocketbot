@@ -1,6 +1,6 @@
 # 🚀🤖 Rocketbot
 
-![build](https://github.com/canva-public/rocketbot/actions/workflows/node.js.yml/badge.svg)
+[![build](https://github.com/canva-public/rocketbot/actions/workflows/node.js.yml/badge.svg)](https://github.com/canva-public/rocketbot/actions/workflows/node.js.yml)
 
 This lambda provides a bridge between github and Buildkite, allowing you to trigger a Buildkite build from a comment on a pull request on github.
 
@@ -81,3 +81,9 @@ and then you can run the tests as usual with `yarn test` or kick them in watch m
 ### Debugging hints
 
 Use `ENABLE_DEBUG=true DEBUG=nock.* yarn test:watch` and `.only` in the tests to see output and assertions from nock.
+
+## Releasing
+
+- Tag a commit with a tag following the pattern `vX.X.X` (where `X.X.X` is the new to-be-releases semver of the package).
+- This will create a new release and attach a zip file to it.
+- After, please add as much detail as possible to the release description.

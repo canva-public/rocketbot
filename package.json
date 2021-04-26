@@ -1,5 +1,5 @@
 {
-  "name": "@canva/rocketbot",
+  "name": "@canva-public/rocketbot",
   "version": "1.0.0",
   "description": "A lambda function to enable comment-driven actions via github",
   "main": "index.js",
