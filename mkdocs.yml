@@ -1,0 +1,16 @@
+site_name: RocketBot
+site_description: >-
+  Documentation for working with the RocketBot PR build bot.
+nav:
+  - About RocketBot: README.md
+  - Getting started: getting-started.md
+  - Guides:
+      - Pass in variables to RocketBot builds: guides/pass-in-variables.md
+      - View or add build build documentation: guides/view-add-build-documentation.md
+      - Set up a repository to work with RocketBot: guides/setup-repository-for-rocketbot.md
+      - Test the Lambda function and API: guides/test-lambda-api.md
+      - RocketBot development and releasing: guides/development-and-releasing.md
+  - Reference:
+      - Variables available to any RocketBot build: reference/variables.md
+plugins:
+  - techdocs-core
