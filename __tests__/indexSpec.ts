@@ -1,5 +1,5 @@
 import { ok } from 'assert';
-import { APIGatewayProxyResult, Context } from 'aws-lambda';
+import type { APIGatewayProxyResult, Context } from 'aws-lambda';
 import nock from 'nock';
 import * as path from 'path';
 
