@@ -6,7 +6,7 @@ process.env.BUILDKITE_ORG_NAME = process.env.BUILDKITE_ORG_NAME || 'some-org';
 process.env.GITHUB_TOKEN = process.env.GITHUB_TOKEN || '__gh-token';
 process.env.GITHUB_USER = process.env.GITHUB_USER || 'some-bot-user';
 
-const githubControl = require('..');
+const githubControl = require('../src');
 
 // Enable this to record HTTP requests when adding a new test
 // nock.recorder.rec();
@@ -343,14 +343,10 @@ describe('github-control', () => {
         errorMessage = e.message;
       }
 
-      await githubControl.handler(lambdaRequest, null, (err, res) => {
-        if (err) {
-          throw err;
-        }
-        assertLambdaResponse(res, 400, {
-          error: `Could not parse event body: ${errorMessage}`,
-        });
-      });
+      await expect(githubControl.handler(lambdaRequest)).rejects.toEqual({
+        statusCode: 400,
+        error: `Could not parse event body: ${errorMessage}`,
+      });   
     });
 
     it('should gracefully handle a failing buildkite request', async () => {
