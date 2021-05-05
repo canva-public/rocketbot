@@ -1,16 +1,56 @@
-/* eslint-disable max-classes-per-file */
+import type {
+  APIGatewayProxyEvent,
+  APIGatewayProxyResult,
+  APIGatewayProxyHandler,
+  Context,
+  Callback,
+} from 'aws-lambda';
+import * as https from 'https';
+import * as url from 'url';
+import type { IncomingHttpHeaders } from 'http';
+import type {
+  WebhookEvent,
+  WebhookEventMap,
+  IssueCommentEvent,
+  WebhookEventName,
+  User,
+  PullRequest,
+  IssueComment,
+  Schema,
+} from '@octokit/webhooks-types';
+import { ok } from 'assert';
+import type { Endpoints } from '@octokit/types';
+
+type Unarray<T> = T extends Array<infer U> ? U : T;
+
+type Contents = Unarray<
+  Endpoints['GET /repos/{owner}/{repo}/contents/{path}']['response']['data']
+>;
+
+type Dict<T> = Record<string, T>;
+
 const debug = !!process.env.ENABLE_DEBUG;
 const log = debug
   ? /* istanbul ignore next */ console.log.bind(console) // eslint-disable-line no-console
-  : function log() {};
+  : function log() {}; // eslint-disable-line @typescript-eslint/no-empty-function
 const info = debug
   ? /* istanbul ignore next */ console.info.bind(console) // eslint-disable-line no-console
-  : function info() {};
+  : function info() {}; // eslint-disable-line @typescript-eslint/no-empty-function
 
 log('Loading function');
 
-const https = require('https');
-const url = require('url');
+function assertNotEmpty<T>(thing: T | undefined): T {
+  ok(thing);
+  return thing;
+}
+
+export type JSONResponse =
+  | { error: string }
+  | ({ success: boolean; triggered: boolean; commented?: boolean } & (
+      | { commentUrl?: string }
+      | { updatedCommentUrl: string }
+      | { message: string }
+    ));
 
 // needs: read_builds, write_builds, read_pipelines
 const BUILDKITE_TOKEN = assertEnv('BUILDKITE_TOKEN');
@@ -19,41 +59,37 @@ const GITHUB_TOKEN = assertEnv('GITHUB_TOKEN');
 const GITHUB_USER = assertEnv('GITHUB_USER');
 
 class HttpError extends Error {
-  constructor(...params) {
-    super(...params);
+  constructor(message: string) {
+    super(message);
 
     this.name = 'HttpError';
   }
 }
 
 class Http404Error extends HttpError {
-  constructor(...params) {
-    super(...params);
+  constructor(message: string) {
+    super(message);
 
     this.name = 'Http404Error';
   }
 }
 
-/**
- * This is the handler invoked by Lambda - here is where the magic starts
- *
- * @param {!object} event The event from API Gateway
- * @param {!object} context The execution context of the Lambda function
- * @param {!Function} callback A node-style callback provided by Lambda
- * @return {Promise.<object>} A promise resolving to a Lambda HTTP JSON object
- */
-exports.handler = (event, context, callback) => {
+export const handler: APIGatewayProxyHandler = async (
+  event: APIGatewayProxyEvent,
+  context: Context /* For legacy testing only */,
+  callback?: Callback /* For legacy testing only */,
+): Promise<APIGatewayProxyResult> => {
   log('Received event:', JSON.stringify(event, null, 2));
 
-  const done = (err, res) => {
-    const ret = {
-      statusCode: err ? '400' : '200',
+  const done = (err: Error | null, res?: JSONResponse) => {
+    const ret: APIGatewayProxyResult = {
+      statusCode: err ? 400 : 200,
       body: err ? JSON.stringify({ error: err.message }) : JSON.stringify(res),
       headers: {
         'Content-Type': 'application/json',
       },
     };
-    callback(null, ret);
+    callback?.(null, ret);
     return Promise.resolve(ret);
   };
 
@@ -61,17 +97,26 @@ exports.handler = (event, context, callback) => {
     return done(new Error(`Unsupported method "${event.httpMethod}"`));
   }
 
-  const currentEventType = event.headers['X-GitHub-Event'];
-  log('event body', event.body);
-  let eventBody;
-  try {
-    eventBody = JSON.parse(event.body);
-  } catch (e) {
-    return done(new Error(`Could not parse event body: ${e.message}`));
+  ok(event.headers['X-GitHub-Event']);
+  const currentEventType = (event.headers[
+    'X-GitHub-Event'
+  ] as unknown) as WebhookEventName;
+
+  function parseBody<T extends Schema>(event: APIGatewayProxyEvent) {
+    ok(event.body);
+    log('event body', event.body);
+    try {
+      return (JSON.parse(event.body) as unknown) as T;
+    } catch (e) {
+      throw new Error(`Could not parse event body: ${e.message}`);
+    }
   }
 
   switch (currentEventType) {
     case 'pull_request': {
+      const eventBody = parseBody<WebhookEventMap[typeof currentEventType]>(
+        event,
+      );
       if (eventBody.action !== 'opened') {
         info('PR was not opened, nothing to do here');
         return done(null, { success: true, triggered: false });
@@ -180,7 +225,13 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
     }
     case 'issue_comment':
     case 'pull_request_review_comment': {
-      const isIssueComment = currentEventType === 'issue_comment';
+      const isIssueComment = (
+        eventName: WebhookEventName,
+        event: WebhookEvent,
+      ): event is IssueCommentEvent => eventName === 'issue_comment';
+      const eventBody = parseBody<WebhookEventMap[typeof currentEventType]>(
+        event,
+      );
       const commenter = eventBody.sender.login;
 
       if (commenter === GITHUB_USER) {
@@ -192,7 +243,10 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
         info('Comment was deleted, nothing to do here');
         return done(null, { success: true, triggered: false });
       }
-      if (isIssueComment && !eventBody.issue.pull_request) {
+      if (
+        isIssueComment(currentEventType, eventBody) &&
+        !eventBody.issue.pull_request
+      ) {
         info('Request is not coming from a pull request, nothing to do here');
         return done(null, { success: true, triggered: false });
       }
@@ -201,8 +255,8 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
         return done(null, { success: true, triggered: false });
       }
 
-      const prHtmlUrl = isIssueComment
-        ? eventBody.issue.pull_request.html_url
+      const prHtmlUrl = isIssueComment(currentEventType, eventBody)
+        ? eventBody.issue.pull_request?.html_url
         : eventBody.pull_request.html_url;
 
       const requestedBuildData = parseTriggerComment(eventBody.comment.body);
@@ -210,33 +264,37 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
       info(
         `@${commenter} requested "${requestedBuildData.buildNames.join(
           ',',
-        )}" for ${prHtmlUrl}`,
+        )}" for ${prHtmlUrl || 'unkown URL'}`, // TODO: better fallback for unkown URLs
       );
 
       const customEnv = requestedBuildData.env;
       const customEnvKeys = Object.keys(requestedBuildData.env);
       const hasCustomEnv = customEnvKeys.length > 0;
-      requestedBuildData.env = customEnvKeys.reduce((ret, key) => {
-        ret[`GH_CONTROL_USER_ENV_${key}`] = requestedBuildData.env[key]; // eslint-disable-line
-        // no-param-reassign
-        return ret;
-      }, {});
+      requestedBuildData.env = customEnvKeys.reduce<Dict<string>>(
+        (ret, key) => {
+          ret[`GH_CONTROL_USER_ENV_${key}`] = requestedBuildData.env[key];
+          return ret;
+        },
+        {},
+      );
 
       return Promise.all([
-        isIssueComment
-          ? githubGetPullRequestDetails(eventBody.issue.pull_request.url)
+        isIssueComment(currentEventType, eventBody)
+          ? githubGetPullRequestDetails(
+              assertNotEmpty(eventBody.issue.pull_request?.url), // TODO: handle empty case gracefully
+            )
           : // pull_request_review_comment events have that information already,
             // no need to query the Github API
-            Promise.resolve(eventBody.pull_request),
-        githubApiRequest(eventBody.sender.url),
+            Promise.resolve(eventBody.pull_request as PullRequest),
+        //Promise.resolve(eventBody.sender),
+        githubApiRequest<User>(eventBody.sender.url), // TODO: replace with direct resolve from above to save one request
       ])
         .then((dataArray) => {
-          const prData = dataArray[0];
+          const prData: PullRequest = dataArray[0];
           const senderData = dataArray[1];
           const senderName = senderData.name;
-          const senderEmail = senderData.email;
+          const senderEmail = senderData.email ?? undefined;
 
-          // eslint-disable-next-line max-len
           return buildkiteStartBuild(
             requestedBuildData,
             prData,
@@ -280,7 +338,7 @@ ${requestedBuildData.buildNames
 \`\`\`\`
 </details>
 `;
-              const perBuildResponse = (buildName, idx) =>
+              const perBuildResponse = (buildName: string, idx: number) =>
                 `* [${buildName}#${data[idx].number}](${data[idx].url}) scheduled at \`${data[idx].scheduled}\``;
               const updatedComment = `pls gib green ༼ つ ◕_◕ ༽つ via ${
                 prData.head.sha
@@ -307,6 +365,9 @@ ${requestedBuildData.buildNames
         );
     }
     case 'ping': {
+      const eventBody = parseBody<WebhookEventMap[typeof currentEventType]>(
+        event,
+      );
       if (
         !eventBody.hook.active ||
         !eventBody.hook.events ||
@@ -317,11 +378,14 @@ ${requestedBuildData.buildNames
         );
       }
 
+      const repository =
+        eventBody.repository?.full_name ?? 'unknown repository';
+
       return done(null, {
         success: true,
         triggered: false,
         commented: false,
-        message: `Hooks working for ${eventBody.repository.full_name}`,
+        message: `Hooks working for ${repository}`,
       });
     }
     default:
@@ -336,10 +400,9 @@ ${requestedBuildData.buildNames
  *    user@hostname:path/to/resource  ==> hostname:path/to/resource
  *    ssh://hostname:path/to/resource ==> hostname:path/to/resource
  *
- * @param {string} sshUri An SSH URI.
- * @return {string} The URL component of an SSH URI.
+ * @return The URL component of an SSH URI.
  */
-function urlPart(sshUri) {
+function urlPart(sshUri: string) {
   if (!sshUri) {
     throw new Error(`Invalid SSH URI: ${sshUri}`);
   }
@@ -356,12 +419,11 @@ function urlPart(sshUri) {
 
 /**
  * Retrieves details about a pull request
- *
- * @param {string} prUrl The fully qualified API URL to a Github comment
- * @return {Promise} A promise resolving to the decoded JSON data of the Github API response
  */
-function githubGetPullRequestDetails(prUrl) {
-  return githubApiRequest(prUrl);
+async function githubGetPullRequestDetails(
+  prUrl: string /* The fully qualified API URL to a Github comment */,
+) {
+  return githubApiRequest<PullRequest>(prUrl);
 }
 
 /**
@@ -371,10 +433,10 @@ function githubGetPullRequestDetails(prUrl) {
  * @param {string} commentBody The content to use for the comment. Can contain markdown.
  * @return {Promise} A promise resolving to the decoded JSON data of the Github API response
  */
-function githubAddComment(commentsUrl, commentBody) {
+async function githubAddComment(commentsUrl: string, commentBody: string) {
   const options = { method: 'POST' };
   const body = { body: commentBody };
-  return githubApiRequest(commentsUrl, options, body);
+  return githubApiRequest<IssueComment>(commentsUrl, options, body);
 }
 
 /**
@@ -384,10 +446,10 @@ function githubAddComment(commentsUrl, commentBody) {
  * @param {string} newBody The new content to use for the comment. Can contain markdown.
  * @return {Promise} A promise resolving to the decoded JSON data of the Github API response
  */
-function githubUpdateComment(commentUrl, newBody) {
+async function githubUpdateComment(commentUrl: string, newBody: string) {
   const options = { method: 'PATCH' };
   const body = { body: newBody };
-  return githubApiRequest(commentUrl, options, body);
+  return githubApiRequest<IssueComment>(commentUrl, options, body);
 }
 
 /**
@@ -395,13 +457,12 @@ function githubUpdateComment(commentUrl, newBody) {
  *
  * Variables in the string are given using Bash-like syntax (e.g. $var or
  * ${var}).
- *
- * @param {string} templateString The template.
- * @param {object} mapping A mapping from a variable name to its value.
- * @return {string} A templated string.
  */
-function template(templateString, mapping) {
-  function reducer(haystack, mappingEntry) {
+function template(
+  templateString: string,
+  mapping: Dict<string> /* A mapping from a variable name to its value. */,
+): string {
+  function reducer(haystack: string, mappingEntry: [string, string]) {
     const [varName, replacement] = mappingEntry;
     const needle = new RegExp(
       // eslint-disable-next-line prefer-template, no-multi-spaces, operator-linebreak, no-useless-concat
@@ -421,7 +482,11 @@ function template(templateString, mapping) {
  * @param {Array} pipeline An array of pipeline objects.
  * @return {Promise} A promise resolving to an array of strings.
  */
-function fetchDocumentationLinkMds(prData, orgSlug, pipelines) {
+function fetchDocumentationLinkMds(
+  prData: PullRequest,
+  orgSlug: string,
+  pipelines: Pipeline[],
+) {
   return Promise.all(
     pipelines.map((pipeline) =>
       fetchDocumentationLinkMd(prData, BUILDKITE_ORG_NAME, pipeline),
@@ -437,7 +502,11 @@ function fetchDocumentationLinkMds(prData, orgSlug, pipelines) {
  * @param {object} pipeline An array of pipeline objects.
  * @return {Promise} A promise resolving to a string.
  */
-async function fetchDocumentationLinkMd(prData, orgSlug, pipeline) {
+async function fetchDocumentationLinkMd(
+  prData: PullRequest,
+  orgSlug: string,
+  pipeline: Pipeline,
+) {
   const documentationUrl = await fetchDocumentationUrl(
     prData,
     orgSlug,
@@ -462,7 +531,11 @@ async function fetchDocumentationLinkMd(prData, orgSlug, pipeline) {
  * @param {object} pipeline An array of pipeline objects.
  * @return {Promise} A promise resolving to a URL string or null.
  */
-async function fetchDocumentationUrl(prData, orgSlug, pipeline) {
+async function fetchDocumentationUrl(
+  prData: PullRequest,
+  orgSlug: string,
+  pipeline: Pipeline,
+): Promise<string | null> {
   const docOverrideUrl = (pipeline.env || {}).GH_CONTROL_README_URL;
   if (docOverrideUrl) {
     const mapping = {
@@ -480,7 +553,7 @@ async function fetchDocumentationUrl(prData, orgSlug, pipeline) {
     `/${orgSlug}/${pipeline.slug}.md?ref=${prData.head.sha}`;
 
   try {
-    const res = await githubApiRequest(candidateUrl);
+    const res = await githubApiRequest<Contents>(candidateUrl);
     return res.html_url;
   } catch (e) {
     if (e instanceof Http404Error) {
@@ -513,7 +586,11 @@ async function fetchDocumentationUrl(prData, orgSlug, pipeline) {
  * @param {object} pipeline An array of pipeline objects.
  * @return {string} A link.
  */
-function getDocumentationCreationLink(prData, orgSlug, pipeline) {
+function getDocumentationCreationLink(
+  prData: PullRequest,
+  orgSlug: string,
+  pipeline: Pipeline,
+) {
   return (
     '' +
     `https://github.com/${prData.head.repo.full_name}` +
@@ -527,12 +604,8 @@ function getDocumentationCreationLink(prData, orgSlug, pipeline) {
 
 /**
  * Do what zip does in every other language ever
- *
- * @param {Array} xs The first list.
- * @param {Array} ys The second list.
- * @return {Array} The zipped list.
  */
-function zip(xs, ys) {
+function zip<S, T>(xs: S[], ys: T[]): [S, T][] {
   if (xs.length !== ys.length) {
     throw new Error('xs and ys must have the same length');
   }
@@ -548,7 +621,11 @@ function zip(xs, ys) {
  * @param {?object} requestBody The JSON body to send to Github
  * @return {Promise} A promise resolving to the decoded JSON data of the Github API response
  */
-async function githubApiRequest(ghUrl, additionalOptions, requestBody) {
+async function githubApiRequest<T>(
+  ghUrl: string,
+  additionalOptions?: Partial<https.RequestOptions>,
+  requestBody?: Record<string, unknown>,
+): Promise<T> {
   const options = Object.assign(
     url.parse(ghUrl),
     {
@@ -556,7 +633,7 @@ async function githubApiRequest(ghUrl, additionalOptions, requestBody) {
     },
     additionalOptions || {},
   );
-  const { body } = await jsonRequest(options, requestBody);
+  const { body } = await jsonRequest<T>(options, requestBody);
   return body;
 }
 
@@ -568,10 +645,10 @@ async function githubApiRequest(ghUrl, additionalOptions, requestBody) {
  * @return {Promise} A promise resolving to the decoded JSON data of the Buildkite API response
  */
 async function buildkiteReadPipelines() {
-  let pipelines = [];
+  let pipelines: Pipeline[] = [];
 
-  async function fetchNextPage(page) {
-    const { body, headers } = await buildkiteApiRequest(
+  async function fetchNextPage(page: number) {
+    const { body, headers } = await buildkiteApiRequest<Pipeline>(
       `pipelines?page=${page}&per_page=100`,
     );
     pipelines = pipelines.concat(body);
@@ -588,9 +665,20 @@ async function buildkiteReadPipelines() {
 }
 
 /**
+ * Incomplete (e.g. only the subset needed by this lambda) type descriptor for the response
+ * of https://buildkite.com/docs/apis/rest-api/pipelines
+ */
+type Pipeline = {
+  slug: string;
+  repository: string;
+  env?: Dict<string>;
+  description?: string;
+};
+
+/**
  * Starts a buildkite build
  *
- * @param {{buildNames: Array<string>, env: !Object<string,string>}} buildData The Buildkite data
+ * @param buildData The Buildkite data
  *        containing the build slug (/pipelines/$buildName/...) in .buildNames and any user-defined
  *        environment variables in .env (they will be available in the Buildkite build prefixed with
  *        `GH_CONTROL_USER_ENV_`.
@@ -602,13 +690,13 @@ async function buildkiteReadPipelines() {
  * @param {string} senderEmail The email address of the person requesting the build
  * @return {Promise} A promise resolving to the decoded JSON data of the Buildkite API response
  */
-function buildkiteStartBuild(
-  buildData,
-  prData,
-  requester,
-  commentUrl,
-  senderName,
-  senderEmail,
+async function buildkiteStartBuild(
+  buildData: { buildNames: string[]; env: NodeJS.ProcessEnv },
+  prData: PullRequest,
+  requester: string,
+  commentUrl: string,
+  senderName?: string,
+  senderEmail?: string,
 ) {
   const branch = prData.head.ref;
   const commit = prData.head.sha;
@@ -636,7 +724,7 @@ function buildkiteStartBuild(
   };
   return Promise.all(
     buildData.buildNames.map(async (buildName) => {
-      const { body } = await buildkiteApiRequest(
+      const { body } = await buildkiteApiRequest<Build>(
         `pipelines/${buildName}/builds`,
         { method: 'POST' },
         requestBody,
@@ -645,6 +733,15 @@ function buildkiteStartBuild(
     }),
   );
 }
+
+/**
+ * Incomplete type descriptor of the https://buildkite.com/docs/apis/rest-api/builds#list-all-builds endpoint responses
+ */
+type Build = {
+  web_url: string;
+  number: number;
+  scheduled_at: string;
+};
 
 /**
  * Makes an HTTP request against the Buildkite API v2.
@@ -658,7 +755,11 @@ function buildkiteStartBuild(
  *                   where body is the decoded JSON data of the Buildkite API response and headers
  *                   is a map
  */
-function buildkiteApiRequest(apiPathNoOrg, additionalOptions, body) {
+async function buildkiteApiRequest<T>(
+  apiPathNoOrg: string,
+  additionalOptions?: Partial<https.RequestOptions>,
+  body?: Record<string, unknown>,
+) {
   const options = {
     hostname: 'api.buildkite.com',
     path: `/v2/organizations/${BUILDKITE_ORG_NAME}/${apiPathNoOrg}`,
@@ -667,7 +768,7 @@ function buildkiteApiRequest(apiPathNoOrg, additionalOptions, body) {
     },
     ...(additionalOptions || {}),
   };
-  return jsonRequest(options, body);
+  return jsonRequest<T>(options, body);
 }
 
 /* General helper functions */
@@ -681,14 +782,17 @@ function buildkiteApiRequest(apiPathNoOrg, additionalOptions, body) {
  *                   where body is the decoded JSON data of the endpoint response and headers
  *                   is a map
  */
-function jsonRequest(options, jsonBody) {
-  const localOptions = { ...options };
+async function jsonRequest<T = Record<string, unknown>>(
+  options: Partial<https.RequestOptions>,
+  jsonBody?: Record<string, unknown>,
+): Promise<{ body: T; headers: IncomingHttpHeaders }> {
+  const localOptions: https.RequestOptions = { ...options };
   localOptions.headers = Object.assign(options.headers || {}, {
     'User-Agent': 'githubHook/2.0.1', // Note: this is mandatory for the GitHub API
     'Content-Type': 'application/json',
   });
 
-  let body = null;
+  let body: string;
   if (jsonBody) {
     body = JSON.stringify(jsonBody);
     localOptions.headers['Content-Length'] = Buffer.byteLength(body);
@@ -705,9 +809,9 @@ function jsonRequest(options, jsonBody) {
           error = new Http404Error(
             `Request Failed. Status Code: ${statusCode}`,
           );
-        } else if (statusCode < 200 || statusCode >= 300) {
+        } else if (!statusCode || statusCode < 200 || statusCode >= 300) {
           error = new HttpError(`Request Failed. Status Code: ${statusCode}`);
-        } else if (!/^application\/json/.test(contentType)) {
+        } else if (!contentType || !/^application\/json/.test(contentType)) {
           error = new Error(
             `Invalid content-type. Expected application/json but received ${contentType}`,
           );
@@ -747,11 +851,10 @@ function jsonRequest(options, jsonBody) {
 /**
  * Asserts that a given environment variable is set and returns it
  *
- * @param {string} name The name of the environment variable
- * @return {string} The value of the given environment variable
+ * @return The value of the given environment variable
  * @throws {Error} if the environment variable is not set
  */
-function assertEnv(name) {
+function assertEnv(name: string /* The name of the environment variable */) {
   const value = process.env[name];
   if (!value) {
     /* istanbul ignore next */
@@ -784,7 +887,7 @@ const buildTriggerRegex = new RegExp(
  * @param {string} commentBody
  * @return {boolean}
  */
-function isTriggerComment(commentBody) {
+export function isTriggerComment(commentBody: string): boolean {
   return buildTriggerRegex.test(commentBody);
 }
 
@@ -805,7 +908,7 @@ function isTriggerComment(commentBody) {
  * @param {string} envBlock The environment variable block to parse
  * @return {Object<string,string>}
  */
-function parseEnvBlock(envBlock) {
+function parseEnvBlock(envBlock: string) {
   return envBlock
     .split('\n') // one env definition per line
     .map((line) => line.split(/=(.*)/).slice(0, 2)) // split into env key/value pairs
@@ -818,8 +921,8 @@ function parseEnvBlock(envBlock) {
       }
       return [k, value];
     })
-    .reduce((ret, [k, v]) => {
-      ret[k] = v; // eslint-disable-line no-param-reassign
+    .reduce<Dict<string>>((ret, [k, v]) => {
+      ret[k] = v;
       return ret;
     }, {});
 }
@@ -830,16 +933,25 @@ function parseEnvBlock(envBlock) {
  * @param {string} commentBody
  * @return {{buildNames: Array<string>, env: !Object<string,string>}}
  */
-function parseTriggerComment(commentBody) {
+export function parseTriggerComment(
+  commentBody: string,
+): { buildNames: string[]; env: Dict<string> } {
   const match = commentBody.match(buildTriggerRegex);
-  const pipelinesBlock = match[0];
-  const envBlock = match[3];
+  // TODO: ensure that matches are mapped properly - either with named captures and/or non-capturing groups
+  const pipelinesBlock = match ? match[0] : '';
+  const envBlock = match ? match[3] : null;
 
-  const rockets = pipelinesBlock.match(new RegExp(rocketPattern, ['g']));
+  const rockets = pipelinesBlock.match(new RegExp(rocketPattern, 'g')) || [];
 
-  const buildNames = rockets.reduce((acc, rocket) => {
-    const pipelineNames = rocket.match(rocketPattern)[1];
-    return acc.concat(pipelineNames.match(pipelineNameRegex));
+  const buildNames = rockets.reduce<string[]>((acc, rocket) => {
+    const pipelineNames = rocket.match(rocketPattern)?.[1];
+    if (pipelineNames) {
+      const buildName = pipelineNames.match(pipelineNameRegex);
+      if (buildName?.length) {
+        return [...acc, ...buildName];
+      }
+    }
+    return acc;
   }, []);
 
   return {
@@ -847,6 +959,3 @@ function parseTriggerComment(commentBody) {
     env: envBlock ? parseEnvBlock(envBlock) : {},
   };
 }
-
-module.exports.isTriggerComment = isTriggerComment;
-module.exports.parseTriggerComment = parseTriggerComment;
