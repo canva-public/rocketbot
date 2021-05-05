@@ -283,22 +283,16 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
         {},
       );
 
-      return Promise.all([
+      return Promise.all<PullRequest, User>([
         isIssueComment(currentEventType, eventBody)
           ? githubGetPullRequestDetails(
               assertNotEmpty(eventBody.issue.pull_request?.url), // TODO: handle empty case gracefully
             )
-          : // pull_request_review_comment events have that information already,
-            // no need to query the Github API
-            Promise.resolve(eventBody.pull_request as PullRequest),
-        //Promise.resolve(eventBody.sender),
-        githubApiRequest<User>(eventBody.sender.url), // TODO: replace with direct resolve from above to save one request
+          : Promise.resolve(eventBody.pull_request as PullRequest),
+        githubApiRequest<User>(eventBody.sender.url),
       ])
-        .then((dataArray) => {
-          const prData: PullRequest = dataArray[0];
-          const senderData = dataArray[1];
-          const senderName = senderData.name;
-          const senderEmail = senderData.email ?? undefined;
+        .then(([prData, senderData]) => {
+          const { name: senderName, email: senderEmail } = senderData;
 
           return buildkiteStartBuild(
             requestedBuildData,
@@ -306,7 +300,7 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
             commenter,
             commentUrl,
             senderName,
-            senderEmail,
+            senderEmail ?? undefined,
           )
             .then((bkDatas) =>
               bkDatas.map((bkData) => {
