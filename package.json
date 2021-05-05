@@ -31,7 +31,7 @@
     "@octokit/webhooks-types": "^3.71.2",
     "@types/aws-lambda": "^8.10.76",
     "@types/jest": "^26.0.22",
-    "@types/node": "12.x",
+    "@types/node": "10.x",
     "@typescript-eslint/eslint-plugin": "^4.22.1",
     "@typescript-eslint/parser": "^4.22.1",
     "eslint": "^7.24.0",
@@ -48,7 +48,7 @@
     "typescript": "^4.2.4"
   },
   "engines": {
-    "node": "12.x || 14.x"
+    "node": "10.x || 12.x || 14.x"
   },
   "lint-staged": {
     "*.{js,ts}": "eslint --cache --fix",
