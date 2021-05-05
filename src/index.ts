@@ -20,6 +20,7 @@ import type {
 } from '@octokit/webhooks-types';
 import { ok } from 'assert';
 import type { Endpoints } from '@octokit/types';
+import { isTriggerComment, parseTriggerComment } from './trigger';
 
 type Unarray<T> = T extends Array<infer U> ? U : T;
 
@@ -270,7 +271,7 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
       const customEnv = requestedBuildData.env;
       const customEnvKeys = Object.keys(requestedBuildData.env);
       const hasCustomEnv = customEnvKeys.length > 0;
-      requestedBuildData.env = customEnvKeys.reduce<Dict<string>>(
+      requestedBuildData.env = customEnvKeys.reduce<NodeJS.ProcessEnv>(
         (ret, key) => {
           ret[`GH_CONTROL_USER_ENV_${key}`] = requestedBuildData.env[key];
           return ret;
@@ -429,9 +430,9 @@ async function githubGetPullRequestDetails(
 /**
  * Adds a comment to a given comment thread
  *
- * @param {string} commentsUrl The fully qualified API URL to a github comments endpoint.
- * @param {string} commentBody The content to use for the comment. Can contain markdown.
- * @return {Promise} A promise resolving to the decoded JSON data of the Github API response
+ * @param commentsUrl The fully qualified API URL to a github comments endpoint.
+ * @param commentBody The content to use for the comment. Can contain markdown.
+ * @return A promise resolving to the decoded JSON data of the Github API response
  */
 async function githubAddComment(commentsUrl: string, commentBody: string) {
   const options = { method: 'POST' };
@@ -442,9 +443,9 @@ async function githubAddComment(commentsUrl: string, commentBody: string) {
 /**
  * Updates a Github comment
  *
- * @param {string} commentUrl The fully qualified API URL to a github comment endpoint.
- * @param {string} newBody The new content to use for the comment. Can contain markdown.
- * @return {Promise} A promise resolving to the decoded JSON data of the Github API response
+ * @param commentUrl The fully qualified API URL to a github comment endpoint.
+ * @param newBody The new content to use for the comment. Can contain markdown.
+ * @return A promise resolving to the decoded JSON data of the Github API response
  */
 async function githubUpdateComment(commentUrl: string, newBody: string) {
   const options = { method: 'PATCH' };
@@ -477,10 +478,10 @@ function template(
 /**
  * Fetch data to produce markdown linking to documentation a set of pipelines
  *
- * @param {object} prData Data belonging to the PR which this markdown should be produced for.
- * @param {string} orgSlug The Buildkite organization which this markdown should be produced for.
- * @param {Array} pipeline An array of pipeline objects.
- * @return {Promise} A promise resolving to an array of strings.
+ * @param prData Data belonging to the PR which this markdown should be produced for.
+ * @param orgSlug The Buildkite organization which this markdown should be produced for.
+ * @param pipeline An array of pipeline objects.
+ * @return A promise resolving to an array of strings.
  */
 function fetchDocumentationLinkMds(
   prData: PullRequest,
@@ -497,10 +498,10 @@ function fetchDocumentationLinkMds(
 /**
  * Fetch data to produce markdown linking to documentation a single pipeline
  *
- * @param {object} prData Data belonging to the PR which this markdown should be produced for.
- * @param {string} orgSlug The Buildkite organization which this markdown should be produced for.
- * @param {object} pipeline An array of pipeline objects.
- * @return {Promise} A promise resolving to a string.
+ * @param prData Data belonging to the PR which this markdown should be produced for.
+ * @param orgSlug The Buildkite organization which this markdown should be produced for.
+ * @param pipeline An array of pipeline objects.
+ * @return A promise resolving to a string.
  */
 async function fetchDocumentationLinkMd(
   prData: PullRequest,
@@ -526,10 +527,10 @@ async function fetchDocumentationLinkMd(
 /**
  * Fetch the URL linking to documentation for a pipeline
  *
- * @param {object} prData Data belonging to the PR which this markdown should be produced for.
- * @param {string} orgSlug The Buildkite organization which this markdown should be produced for.
- * @param {object} pipeline An array of pipeline objects.
- * @return {Promise} A promise resolving to a URL string or null.
+ * @param prData Data belonging to the PR which this markdown should be produced for.
+ * @param orgSlug The Buildkite organization which this markdown should be produced for.
+ * @param pipeline An array of pipeline objects.
+ * @return A promise resolving to a URL string or null.
  */
 async function fetchDocumentationUrl(
   prData: PullRequest,
@@ -581,9 +582,9 @@ async function fetchDocumentationUrl(
  *   &value=%23%20some-pipeline%0A%0A%5B
  *   Document%20some-pipeline%27s%20RocketBot%20options%20here%5D
  *
- * @param {object} prData Data belonging to the PR which this markdown should be produced for.
- * @param {string} orgSlug The Buildkite organization which this markdown should be produced for.
- * @param {object} pipeline An array of pipeline objects.
+ * @param prData Data belonging to the PR which this markdown should be produced for.
+ * @param orgSlug The Buildkite organization which this markdown should be produced for.
+ * @param pipeline An array of pipeline objects.
  * @return {string} A link.
  */
 function getDocumentationCreationLink(
@@ -615,11 +616,11 @@ function zip<S, T>(xs: S[], ys: T[]): [S, T][] {
 /**
  * Makes an HTTP request against the given Github API URL
  *
- * @param {string} ghUrl The fully qualified URL of the Github API endpoint
- * @param {?object} additionalOptions An option object according to the 'https' node module.
+ * @param ghUrl The fully qualified URL of the Github API endpoint
+ * @param additionalOptions An option object according to the 'https' node module.
  *                                    Conflicting keys will overwrite any default options.
- * @param {?object} requestBody The JSON body to send to Github
- * @return {Promise} A promise resolving to the decoded JSON data of the Github API response
+ * @param requestBody The JSON body to send to Github
+ * @return A promise resolving to the decoded JSON data of the Github API response
  */
 async function githubApiRequest<T>(
   ghUrl: string,
@@ -642,7 +643,7 @@ async function githubApiRequest<T>(
 /**
  * Returns all defined Buildkite pipelines in the current organization
  *
- * @return {Promise} A promise resolving to the decoded JSON data of the Buildkite API response
+ * @return A promise resolving to the decoded JSON data of the Buildkite API response
  */
 async function buildkiteReadPipelines() {
   let pipelines: Pipeline[] = [];
@@ -683,12 +684,12 @@ type Pipeline = {
  *        environment variables in .env (they will be available in the Buildkite build prefixed with
  *        `GH_CONTROL_USER_ENV_`.
  *        A user-defined environment variable X=Y would become GH_CONTROL_USER_ENV_X=Y
- * @param {object} prData The pull request data
- * @param {string} requester The github username of the person requesting the build
- * @param {string} senderName The full name of the person requesting the build
- * @param {string} commentUrl The URL of the comment requesting the build
- * @param {string} senderEmail The email address of the person requesting the build
- * @return {Promise} A promise resolving to the decoded JSON data of the Buildkite API response
+ * @param prData The pull request data
+ * @param requester The github username of the person requesting the build
+ * @param senderName The full name of the person requesting the build
+ * @param commentUrl The URL of the comment requesting the build
+ * @param senderEmail The email address of the person requesting the build
+ * @return A promise resolving to the decoded JSON data of the Buildkite API response
  */
 async function buildkiteStartBuild(
   buildData: { buildNames: string[]; env: NodeJS.ProcessEnv },
@@ -746,12 +747,12 @@ type Build = {
 /**
  * Makes an HTTP request against the Buildkite API v2.
  *
- * @param {string} apiPathNoOrg The path of the endpoint behind the
+ * @param apiPathNoOrg The path of the endpoint behind the
  *                              organizational part without preceding slash
- * @param {?object} additionalOptions An option object according to the 'https' node module.
+ * @param additionalOptions An option object according to the 'https' node module.
  *                                    Conflicting keys will overwrite any default options.
- * @param {?object} body The JSON body to send to Buildkite
- * @return {Promise} A promise resolving to an object { body, headers},
+ * @param body The JSON body to send to Buildkite
+ * @return A promise resolving to an object { body, headers},
  *                   where body is the decoded JSON data of the Buildkite API response and headers
  *                   is a map
  */
@@ -776,9 +777,7 @@ async function buildkiteApiRequest<T>(
 /**
  * Makes an HTTP request against a given endpoint
  *
- * @param {!object} options An options object as expected by the node 'https' module
- * @param {?object} jsonBody The body of the request
- * @return {Promise} A promise resolving to an object { body, headers }
+ * @return A promise resolving to an object { body, headers }
  *                   where body is the decoded JSON data of the endpoint response and headers
  *                   is a map
  */
@@ -861,101 +860,4 @@ function assertEnv(name: string /* The name of the environment variable */) {
     throw new Error(`Required: "${name}" environment variable`);
   }
   return value;
-}
-
-// we match something like:
-// --- 8< ---
-// :rocket:[build-name-a][optional-build-name-b][optional-build-name-c]
-// :rocket:[build-name-d]
-// ```ini
-// OPTIONAL_ENV_VAR=xyz
-// ANOTHER_ONE=abc
-// ```
-// --- 8< ---
-// ignoring all whitespace
-const preamblePattern = '\\s*>?\\s*`?\\s*(?:🚀|:rocket:)';
-const pipelineNameRegex = /([\w-]+)/g;
-const pipelineNamesPattern = '(?:\\s*\\[\\s*[\\w-]+\\s*\\])+\\s*`?';
-const rocketPattern = `${preamblePattern}(${pipelineNamesPattern})`;
-const envSectionPattern = '(?:```(?:ini)?\\s*((?:.|\\s)+?)\\s*```\\s*)?';
-const buildTriggerRegex = new RegExp(
-  `^(${rocketPattern}\\s*)+\\s*${envSectionPattern}$`,
-);
-
-/**
- * Determines whether a given comment is a valid trigger comment to kick off a new custom build
- * @param {string} commentBody
- * @return {boolean}
- */
-export function isTriggerComment(commentBody: string): boolean {
-  return buildTriggerRegex.test(commentBody);
-}
-
-/**
- * Transforms an env variable block into an object
- *
- * A=a
- * B=b
- * C=c
- *
- * would become
- * {
- * A: 'a',
- * B: 'b',
- * C: 'c'
- * }
- *
- * @param {string} envBlock The environment variable block to parse
- * @return {Object<string,string>}
- */
-function parseEnvBlock(envBlock: string) {
-  return envBlock
-    .split('\n') // one env definition per line
-    .map((line) => line.split(/=(.*)/).slice(0, 2)) // split into env key/value pairs
-    .map((tuple) => tuple.map((part) => part.trim())) // make sure each pair is a trimmed string
-    .filter((tuple) => /^\w+$/.test(tuple[0])) // filter empty and invalid keys
-    .map(([k, v]) => {
-      let value = v || '';
-      if (/^"(.*)"$/.test(value)) {
-        value = JSON.parse(value); // decode quoted vars
-      }
-      return [k, value];
-    })
-    .reduce<Dict<string>>((ret, [k, v]) => {
-      ret[k] = v;
-      return ret;
-    }, {});
-}
-
-/**
- * Parses a markdown trigger comment into an object with the build information
- *
- * @param {string} commentBody
- * @return {{buildNames: Array<string>, env: !Object<string,string>}}
- */
-export function parseTriggerComment(
-  commentBody: string,
-): { buildNames: string[]; env: Dict<string> } {
-  const match = commentBody.match(buildTriggerRegex);
-  // TODO: ensure that matches are mapped properly - either with named captures and/or non-capturing groups
-  const pipelinesBlock = match ? match[0] : '';
-  const envBlock = match ? match[3] : null;
-
-  const rockets = pipelinesBlock.match(new RegExp(rocketPattern, 'g')) || [];
-
-  const buildNames = rockets.reduce<string[]>((acc, rocket) => {
-    const pipelineNames = rocket.match(rocketPattern)?.[1];
-    if (pipelineNames) {
-      const buildName = pipelineNames.match(pipelineNameRegex);
-      if (buildName?.length) {
-        return [...acc, ...buildName];
-      }
-    }
-    return acc;
-  }, []);
-
-  return {
-    buildNames,
-    env: envBlock ? parseEnvBlock(envBlock) : {},
-  };
 }
