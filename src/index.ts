@@ -1,26 +1,28 @@
 import type {
   APIGatewayProxyEvent,
-  APIGatewayProxyResult,
   APIGatewayProxyHandler,
-  Context,
+  APIGatewayProxyResult,
   Callback,
+  Context,
 } from 'aws-lambda';
-import * as https from 'https';
-import * as url from 'url';
-import type { IncomingHttpHeaders } from 'http';
 import type {
+  IssueComment,
+  IssueCommentEvent,
+  PullRequest,
+  Schema,
+  User,
   WebhookEvent,
   WebhookEventMap,
-  IssueCommentEvent,
   WebhookEventName,
-  User,
-  PullRequest,
-  IssueComment,
-  Schema,
 } from '@octokit/webhooks-types';
-import { ok } from 'assert';
-import type { Endpoints } from '@octokit/types';
 import { isTriggerComment, parseTriggerComment } from './trigger';
+import type { Endpoints } from '@octokit/types';
+import type { IncomingHttpHeaders } from 'http';
+import type { RequestOptions } from 'https';
+import { ok } from 'assert';
+import { parse } from 'url';
+import { request } from 'https';
+import pino from 'pino-lambda'; // eslint-disable-line sort-imports
 
 type Unarray<T> = T extends Array<infer U> ? U : T;
 
@@ -30,13 +32,13 @@ type Contents = Unarray<
 
 type Dict<T> = Record<string, T>;
 
-const debug = !!process.env.ENABLE_DEBUG;
-const log = debug
-  ? /* istanbul ignore next */ console.log.bind(console) // eslint-disable-line no-console
-  : function log() {}; // eslint-disable-line @typescript-eslint/no-empty-function
-const info = debug
-  ? /* istanbul ignore next */ console.info.bind(console) // eslint-disable-line no-console
-  : function info() {}; // eslint-disable-line @typescript-eslint/no-empty-function
+const logger = pino({
+  level: 'debug',
+  enabled: process.env.ENABLE_DEBUG !== 'false',
+});
+
+const log = logger.debug.bind(logger);
+const info = logger.info.bind(logger);
 
 log('Loading function');
 
@@ -80,6 +82,8 @@ export const handler: APIGatewayProxyHandler = async (
   context: Context /* For legacy testing only */,
   callback?: Callback /* For legacy testing only */,
 ): Promise<APIGatewayProxyResult> => {
+  logger.withRequest(event, context);
+
   log('Received event:', JSON.stringify(event, null, 2));
 
   const done = (err: Error | null, res?: JSONResponse) => {
@@ -624,11 +628,11 @@ function zip<S, T>(xs: S[], ys: T[]): [S, T][] {
  */
 async function githubApiRequest<T>(
   ghUrl: string,
-  additionalOptions?: Partial<https.RequestOptions>,
+  additionalOptions?: Partial<RequestOptions>,
   requestBody?: Record<string, unknown>,
 ): Promise<T> {
   const options = Object.assign(
-    url.parse(ghUrl),
+    parse(ghUrl),
     {
       auth: `${GITHUB_USER}:${GITHUB_TOKEN}`,
     },
@@ -758,7 +762,7 @@ type Build = {
  */
 async function buildkiteApiRequest<T>(
   apiPathNoOrg: string,
-  additionalOptions?: Partial<https.RequestOptions>,
+  additionalOptions?: Partial<RequestOptions>,
   body?: Record<string, unknown>,
 ) {
   const options = {
@@ -782,10 +786,10 @@ async function buildkiteApiRequest<T>(
  *                   is a map
  */
 async function jsonRequest<T = Record<string, unknown>>(
-  options: Partial<https.RequestOptions>,
+  options: Partial<RequestOptions>,
   jsonBody?: Record<string, unknown>,
 ): Promise<{ body: T; headers: IncomingHttpHeaders }> {
-  const localOptions: https.RequestOptions = { ...options };
+  const localOptions: RequestOptions = { ...options };
   localOptions.headers = Object.assign(options.headers || {}, {
     'User-Agent': 'githubHook/2.0.1', // Note: this is mandatory for the GitHub API
     'Content-Type': 'application/json',
@@ -798,48 +802,44 @@ async function jsonRequest<T = Record<string, unknown>>(
   }
 
   return new Promise((resolve, reject) => {
-    const req = https
-      .request(localOptions, (res) => {
-        const { statusCode, headers } = res;
-        const contentType = headers['content-type'];
+    const req = request(localOptions, (res) => {
+      const { statusCode, headers } = res;
+      const contentType = headers['content-type'];
 
-        let error;
-        if (statusCode === 404) {
-          error = new Http404Error(
-            `Request Failed. Status Code: ${statusCode}`,
-          );
-        } else if (!statusCode || statusCode < 200 || statusCode >= 300) {
-          error = new HttpError(`Request Failed. Status Code: ${statusCode}`);
-        } else if (!contentType || !/^application\/json/.test(contentType)) {
-          error = new Error(
-            `Invalid content-type. Expected application/json but received ${contentType}`,
-          );
-        }
-        if (error) {
-          reject(error);
-          // consume response data to free up memory
-          res.resume();
-          return;
-        }
+      let error;
+      if (statusCode === 404) {
+        error = new Http404Error(`Request Failed. Status Code: ${statusCode}`);
+      } else if (!statusCode || statusCode < 200 || statusCode >= 300) {
+        error = new HttpError(`Request Failed. Status Code: ${statusCode}`);
+      } else if (!contentType || !/^application\/json/.test(contentType)) {
+        error = new Error(
+          `Invalid content-type. Expected application/json but received ${contentType}`,
+        );
+      }
+      if (error) {
+        reject(error);
+        // consume response data to free up memory
+        res.resume();
+        return;
+      }
 
-        res.setEncoding('utf8');
-        let rawData = '';
-        res.on('data', (chunk) => {
-          rawData += chunk;
-        });
-        res.on('end', () => {
-          try {
-            const parsedData = JSON.parse(rawData);
-            resolve({ body: parsedData, headers });
-          } catch (e) {
-            reject(e);
-          }
-        });
-      })
-      .on('error', (e) => {
-        /* istanbul ignore next */
-        reject(e);
+      res.setEncoding('utf8');
+      let rawData = '';
+      res.on('data', (chunk) => {
+        rawData += chunk;
       });
+      res.on('end', () => {
+        try {
+          const parsedData = JSON.parse(rawData);
+          resolve({ body: parsedData, headers });
+        } catch (e) {
+          reject(e);
+        }
+      });
+    }).on('error', (e) => {
+      /* istanbul ignore next */
+      reject(e);
+    });
     if (body) {
       req.write(body);
     }

@@ -1,23 +1,24 @@
-import { ok } from 'assert';
-import type { APIGatewayProxyResult, Context } from 'aws-lambda';
-import nock from 'nock';
-import * as path from 'path';
-import { isTriggerComment, parseTriggerComment } from '../src/trigger';
-
 process.env.BUILDKITE_TOKEN = process.env.BUILDKITE_TOKEN || '__bk-token';
 process.env.BUILDKITE_ORG_NAME = process.env.BUILDKITE_ORG_NAME || 'some-org';
 process.env.GITHUB_TOKEN = process.env.GITHUB_TOKEN || '__gh-token';
 process.env.GITHUB_USER = process.env.GITHUB_USER || 'some-bot-user';
+process.env.AWS_EXECUTION_ENV = 'true';
+process.env.ENABLE_DEBUG = 'false';
 
-import { handler } from '../src';
+import type { APIGatewayProxyResult, Context } from 'aws-lambda';
+import { isTriggerComment, parseTriggerComment } from '../src/trigger';
 import type { JSONResponse } from '../src';
+import { handler } from '../src';
+import { join } from 'path';
+import { ok } from 'assert';
+import nock from 'nock'; // eslint-disable-line sort-imports
 
 // Enable this to record HTTP requests when adding a new test
 // nock.recorder.rec();
 
 function loadFixture(fixturePath: string) {
   // eslint-disable-next-line global-require
-  return require(path.join(__dirname, 'fixtures', fixturePath));
+  return require(join(__dirname, 'fixtures', fixturePath));
 }
 
 function assertLambdaResponse(
