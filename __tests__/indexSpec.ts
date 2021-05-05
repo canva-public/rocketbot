@@ -2,13 +2,15 @@ import { ok } from 'assert';
 import type { APIGatewayProxyResult, Context } from 'aws-lambda';
 import nock from 'nock';
 import * as path from 'path';
+import { isTriggerComment, parseTriggerComment } from '../src/trigger';
 
 process.env.BUILDKITE_TOKEN = process.env.BUILDKITE_TOKEN || '__bk-token';
 process.env.BUILDKITE_ORG_NAME = process.env.BUILDKITE_ORG_NAME || 'some-org';
 process.env.GITHUB_TOKEN = process.env.GITHUB_TOKEN || '__gh-token';
 process.env.GITHUB_USER = process.env.GITHUB_USER || 'some-bot-user';
 
-import * as githubControl from '../src';
+import { handler } from '../src';
+import type { JSONResponse } from '../src';
 
 // Enable this to record HTTP requests when adding a new test
 // nock.recorder.rec();
@@ -21,7 +23,7 @@ function loadFixture(fixturePath: string) {
 function assertLambdaResponse(
   response: APIGatewayProxyResult | undefined,
   expectedStatus: APIGatewayProxyResult['statusCode'],
-  expectedBody: githubControl.JSONResponse,
+  expectedBody: JSONResponse,
 ) {
   ok(response);
   expect(response.statusCode).toStrictEqual(expectedStatus);
@@ -45,58 +47,46 @@ describe('github-control', () => {
     describe('comment matching', () => {
       it('should match a simple comment', () => {
         expect.hasAssertions();
-        expect(githubControl.isTriggerComment(':rocket:[x-build]')).toBe(true);
+        expect(isTriggerComment(':rocket:[x-build]')).toBe(true);
       });
       it('should match a comment with the emoji', () => {
         expect.hasAssertions();
-        expect(githubControl.isTriggerComment('🚀[x-build]')).toBe(true);
+        expect(isTriggerComment('🚀[x-build]')).toBe(true);
       });
       it('should match a comment with lots of whitespace', () => {
         expect.hasAssertions();
         expect(
-          githubControl.isTriggerComment(
-            '    :rocket:      [    x-build    ]     ',
-          ),
+          isTriggerComment('    :rocket:      [    x-build    ]     '),
         ).toBe(true);
       });
       it('should match a comment that is quoted', () => {
         expect.hasAssertions();
-        expect(githubControl.isTriggerComment('> :rocket:[x-build]\n\n')).toBe(
-          true,
-        );
+        expect(isTriggerComment('> :rocket:[x-build]\n\n')).toBe(true);
       });
       it('should match a comment that is quoted and has leading whitespace', () => {
         expect.hasAssertions();
-        expect(
-          githubControl.isTriggerComment('      > :rocket:[x-build]\n\n'),
-        ).toBe(true);
+        expect(isTriggerComment('      > :rocket:[x-build]\n\n')).toBe(true);
       });
       it('should match a comment that has multiple pipelines', () => {
         expect.hasAssertions();
-        expect(
-          githubControl.isTriggerComment('> :rocket:[x-build][y-build]\n\n'),
-        ).toBe(true);
+        expect(isTriggerComment('> :rocket:[x-build][y-build]\n\n')).toBe(true);
       });
       it('should match a comment that has multiple pipelines with whitespace', () => {
         expect.hasAssertions();
-        expect(
-          githubControl.isTriggerComment(
-            '> :rocket:[x-build]    [y-build]\n\n',
-          ),
-        ).toBe(true);
+        expect(isTriggerComment('> :rocket:[x-build]    [y-build]\n\n')).toBe(
+          true,
+        );
       });
       it('should match a comment that has multiple rockets', () => {
         expect.hasAssertions();
         expect(
-          githubControl.isTriggerComment(
-            ':rocket:[x-build]\n    :rocket:[y-build]\n\n',
-          ),
+          isTriggerComment(':rocket:[x-build]\n    :rocket:[y-build]\n\n'),
         ).toBe(true);
       });
       it('should match a comment that is quoted and has multiple rockets', () => {
         expect.hasAssertions();
         expect(
-          githubControl.isTriggerComment(
+          isTriggerComment(
             '> :rocket:[x-build][z-build]\n\n    > :rocket:[y-build]\n\n',
           ),
         ).toBe(true);
@@ -117,7 +107,7 @@ describe('github-control', () => {
           some-forbidden.chars=x
           \`\`\`
 `;
-          expect(githubControl.isTriggerComment(markdown)).toBe(true);
+          expect(isTriggerComment(markdown)).toBe(true);
         });
 
         it('should match a comment with empty env vars', () => {
@@ -127,7 +117,7 @@ describe('github-control', () => {
           \`\`\`ini
           \`\`\`
 `;
-          expect(githubControl.isTriggerComment(markdown)).toBe(true);
+          expect(isTriggerComment(markdown)).toBe(true);
         });
 
         it('should match a comment with env vars that have no highlighting', () => {
@@ -138,7 +128,7 @@ describe('github-control', () => {
           A=a
           \`\`\`
 `;
-          expect(githubControl.isTriggerComment(markdown)).toBe(true);
+          expect(isTriggerComment(markdown)).toBe(true);
         });
       });
     });
@@ -147,50 +137,46 @@ describe('github-control', () => {
       it('should be possible for simple comments', () => {
         expect.hasAssertions();
         expect(
-          githubControl.parseTriggerComment(':rocket:[x-build]').buildNames,
+          parseTriggerComment(':rocket:[x-build]').buildNames,
         ).toStrictEqual(['x-build']);
       });
       it('should be possible for simple comments wrapped in ` characters', () => {
         expect.hasAssertions();
         expect(
-          githubControl.parseTriggerComment('> `:rocket:[x-build]`').buildNames,
+          parseTriggerComment('> `:rocket:[x-build]`').buildNames,
         ).toStrictEqual(['x-build']);
       });
       it('should be possible for comments with emoji', () => {
         expect.hasAssertions();
-        expect(
-          githubControl.parseTriggerComment('🚀[x-build]').buildNames,
-        ).toStrictEqual(['x-build']);
+        expect(parseTriggerComment('🚀[x-build]').buildNames).toStrictEqual([
+          'x-build',
+        ]);
       });
       it('should be possible for comments with lots of whitespace', () => {
         expect.hasAssertions();
         expect(
-          githubControl.parseTriggerComment(
-            '    :rocket:      [    x-build    ]     ',
-          ).buildNames,
+          parseTriggerComment('    :rocket:      [    x-build    ]     ')
+            .buildNames,
         ).toStrictEqual(['x-build']);
       });
       it('should be possible for comments with lots of whitespace wrapped in ` characters', () => {
         expect.hasAssertions();
         expect(
-          githubControl.parseTriggerComment(
-            '    `  :rocket:      [    x-build    ]    `  ',
-          ).buildNames,
+          parseTriggerComment('    `  :rocket:      [    x-build    ]    `  ')
+            .buildNames,
         ).toStrictEqual(['x-build']);
       });
       it('should be possible for comments with multiple builds', () => {
         expect.hasAssertions();
         expect(
-          githubControl.parseTriggerComment(':rocket:[x-build][y-build]')
-            .buildNames,
+          parseTriggerComment(':rocket:[x-build][y-build]').buildNames,
         ).toStrictEqual(['x-build', 'y-build']);
       });
       it('should be possible for comments with multiple builds that have whitespace', () => {
         expect.hasAssertions();
         expect(
-          githubControl.parseTriggerComment(
-            ':rocket:  [x-build]       [y-build]    ',
-          ).buildNames,
+          parseTriggerComment(':rocket:  [x-build]       [y-build]    ')
+            .buildNames,
         ).toStrictEqual(['x-build', 'y-build']);
       });
       it('should be possible for comments with multiple rockets on separate lines', () => {
@@ -199,9 +185,11 @@ describe('github-control', () => {
           :rocket:[x-build][y-build]
           :rocket:[z-build]
 `;
-        expect(
-          githubControl.parseTriggerComment(markdown).buildNames,
-        ).toStrictEqual(['x-build', 'y-build', 'z-build']);
+        expect(parseTriggerComment(markdown).buildNames).toStrictEqual([
+          'x-build',
+          'y-build',
+          'z-build',
+        ]);
       });
 
       it('should be possible for quoted comments with multiple rockets on separate lines', () => {
@@ -211,9 +199,11 @@ describe('github-control', () => {
 
           > :rocket:[z-build]
 `;
-        expect(
-          githubControl.parseTriggerComment(markdown).buildNames,
-        ).toStrictEqual(['x-build', 'y-build', 'z-build']);
+        expect(parseTriggerComment(markdown).buildNames).toStrictEqual([
+          'x-build',
+          'y-build',
+          'z-build',
+        ]);
       });
 
       it('should be possible for quoted comments with multiple rockets on separate lines wrapped with ` chracter', () => {
@@ -223,9 +213,11 @@ describe('github-control', () => {
     
               > \`:rocket:[z-build]\`
 `;
-        expect(
-          githubControl.parseTriggerComment(markdown).buildNames,
-        ).toStrictEqual(['x-build', 'y-build', 'z-build']);
+        expect(parseTriggerComment(markdown).buildNames).toStrictEqual([
+          'x-build',
+          'y-build',
+          'z-build',
+        ]);
       });
 
       describe('env vars', () => {
@@ -262,9 +254,7 @@ describe('github-control', () => {
             },
           };
 
-          expect(githubControl.parseTriggerComment(markdown)).toStrictEqual(
-            expected,
-          );
+          expect(parseTriggerComment(markdown)).toStrictEqual(expected);
         });
 
         it('should be able to deal with an empty block', () => {
@@ -279,9 +269,7 @@ describe('github-control', () => {
             env: {},
           };
 
-          expect(githubControl.parseTriggerComment(markdown)).toStrictEqual(
-            expected,
-          );
+          expect(parseTriggerComment(markdown)).toStrictEqual(expected);
         });
 
         it('should be able to deal with a non-highlighted block', () => {
@@ -299,9 +287,7 @@ describe('github-control', () => {
             },
           };
 
-          expect(githubControl.parseTriggerComment(markdown)).toStrictEqual(
-            expected,
-          );
+          expect(parseTriggerComment(markdown)).toStrictEqual(expected);
         });
       });
     });
@@ -319,7 +305,7 @@ describe('github-control', () => {
     it('should ignore anything that is not a POST', async () => {
       expect.hasAssertions();
       const lambdaRequest = loadFixture('lambda_request_GET');
-      await githubControl.handler(lambdaRequest, context, (err, res) => {
+      await handler(lambdaRequest, context, (err, res) => {
         if (err) {
           throw err;
         }
@@ -332,7 +318,7 @@ describe('github-control', () => {
     it('should ignore unsupported github events', async () => {
       expect.hasAssertions();
       const lambdaRequest = loadFixture('commit_comment/lambda_request');
-      await githubControl.handler(lambdaRequest, context, (err, res) => {
+      await handler(lambdaRequest, context, (err, res) => {
         if (err) {
           throw err;
         }
@@ -355,7 +341,7 @@ describe('github-control', () => {
       }
 
       await expect(
-        githubControl.handler(lambdaRequest, context, jest.fn()),
+        handler(lambdaRequest, context, jest.fn()),
       ).rejects.toStrictEqual(
         new Error(`Could not parse event body: ${errorMessage}`),
       );
@@ -369,7 +355,7 @@ describe('github-control', () => {
         .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
         .reply(401, { message: 'Authorization failed' });
 
-      await githubControl.handler(lambdaRequest, context, (err, res) => {
+      await handler(lambdaRequest, context, (err, res) => {
         if (err) {
           throw err;
         }
@@ -411,7 +397,7 @@ describe('github-control', () => {
           documentation_url: 'https://developer.github.com/v3',
         });
 
-      await githubControl.handler(lambdaRequest, context, (err, res) => {
+      await handler(lambdaRequest, context, (err, res) => {
         if (err) {
           throw err;
         }
@@ -432,7 +418,7 @@ describe('github-control', () => {
           'Content-Type': 'text/plain',
         });
 
-      await githubControl.handler(lambdaRequest, context, (err, res) => {
+      await handler(lambdaRequest, context, (err, res) => {
         if (err) {
           throw err;
         }
@@ -466,7 +452,7 @@ describe('github-control', () => {
           'Content-Type': 'application/json',
         });
 
-      await githubControl.handler(lambdaRequest, context, (err, res) => {
+      await handler(lambdaRequest, context, (err, res) => {
         if (err) {
           throw err;
         }
@@ -481,7 +467,7 @@ describe('github-control', () => {
       it('should properly handle a ping', async () => {
         expect.hasAssertions();
         const lambdaRequest = loadFixture('ping/lambda_request');
-        await githubControl.handler(lambdaRequest, context, (err, res) => {
+        await handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -497,7 +483,7 @@ describe('github-control', () => {
       it('should complain if the events set up are not enough', async () => {
         expect.hasAssertions();
         const lambdaRequest = loadFixture('ping/lambda_request_no_events');
-        await githubControl.handler(lambdaRequest, context, (err, res) => {
+        await handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -512,7 +498,7 @@ describe('github-control', () => {
       it('should ignore when pull requests change state except when they are opened', async () => {
         expect.hasAssertions();
         const lambdaRequest = loadFixture('pull_request/lambda_pr_assigned');
-        await githubControl.handler(lambdaRequest, context, (err, res) => {
+        await handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -534,7 +520,7 @@ describe('github-control', () => {
           .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
           .reply(200, pipelinesReply);
 
-        await githubControl.handler(lambdaRequest, context, (err, res) => {
+        await handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -591,7 +577,7 @@ describe('github-control', () => {
           )
           .reply(404, docSomePipeline);
 
-        await githubControl.handler(lambdaRequest, context, (err, res) => {
+        await handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -625,7 +611,7 @@ describe('github-control', () => {
           .get('/v2/organizations/some-org/pipelines?page=2&per_page=100')
           .reply(200, pipelinesReplyPage2);
 
-        await githubControl.handler(lambdaRequest, context, (err) => {
+        await handler(lambdaRequest, context, (err) => {
           if (err) {
             throw err;
           }
@@ -677,7 +663,7 @@ describe('github-control', () => {
           )
           .reply(200, updateCommentReply);
 
-        await githubControl.handler(lambdaRequest, context, (err, res) => {
+        await handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -746,23 +732,19 @@ describe('github-control', () => {
           )
           .reply(200, updateCommentReply);
 
-        await githubControl.handler(
-          lambdaRequestMultiBuild,
-          context,
-          (err, res) => {
-            if (err) {
-              throw err;
-            }
-            assertNockDone();
-            assertLambdaResponse(res, 200, {
-              success: true,
-              triggered: true,
-              commented: false,
-              updatedCommentUrl:
-                'https://github.com/some-org/some-repo/pull/9500#issuecomment-279928810',
-            });
-          },
-        );
+        await handler(lambdaRequestMultiBuild, context, (err, res) => {
+          if (err) {
+            throw err;
+          }
+          assertNockDone();
+          assertLambdaResponse(res, 200, {
+            success: true,
+            triggered: true,
+            commented: false,
+            updatedCommentUrl:
+              'https://github.com/some-org/some-repo/pull/9500#issuecomment-279928810',
+          });
+        });
       });
 
       it('should start a build with environment variables when an issue comment requests it', async () => {
@@ -809,7 +791,7 @@ describe('github-control', () => {
           )
           .reply(200, updateCommentReply);
 
-        await githubControl.handler(lambdaRequest, context, (err, res) => {
+        await handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -831,7 +813,7 @@ describe('github-control', () => {
           'issue_comment/lambda_request_by_bot',
         );
 
-        await githubControl.handler(lambdaRequest, context, (err, res) => {
+        await handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -849,7 +831,7 @@ describe('github-control', () => {
           'issue_comment/lambda_request_comment_deleted',
         );
 
-        await githubControl.handler(lambdaRequest, context, (err, res) => {
+        await handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -865,7 +847,7 @@ describe('github-control', () => {
         expect.hasAssertions();
         const lambdaRequest = loadFixture('issue_comment/lambda_request_no_pr');
 
-        await githubControl.handler(lambdaRequest, context, (err, res) => {
+        await handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -916,7 +898,7 @@ describe('github-control', () => {
           )
           .reply(200, updateCommentReply);
 
-        await githubControl.handler(lambdaRequest, context, (err, res) => {
+        await handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -937,7 +919,7 @@ describe('github-control', () => {
           'pull_request_review_comment/lambda_request_random_comment',
         );
 
-        await githubControl.handler(lambdaRequest, context, (err, res) => {
+        await handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
