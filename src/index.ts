@@ -289,7 +289,7 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
               assertNotEmpty(eventBody.issue.pull_request?.url), // TODO: handle empty case gracefully
             )
           : Promise.resolve(eventBody.pull_request as PullRequest),
-        Promise.resolve(eventBody.sender),
+        githubApiRequest<User>(eventBody.sender.url),
       ])
         .then(([prData, senderData]) => {
           const { name: senderName, email: senderEmail } = senderData;
