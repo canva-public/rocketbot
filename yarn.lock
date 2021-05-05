@@ -3973,10 +3973,10 @@ pify@^2.0.0:
   resolved "https://registry.yarnpkg.com/pify/-/pify-2.3.0.tgz#ed141a6ac043a849ea588498e7dca8b15330e90c"
   integrity sha1-7RQaasBDqEnqWISY59yosVMw6Qw=
 
-pino-lambda@^1.2.4:
-  version "1.2.4"
-  resolved "https://registry.yarnpkg.com/pino-lambda/-/pino-lambda-1.2.4.tgz#6e41c74cfe32c8e5341e9e7397d356e05068646b"
-  integrity sha512-jfDQxR3lS9wx0E8DpQbJzNgs4NqZRu0J6ufeSZ5Eq0ZSGwEnEkKg3eVzRiD8c9LGUVVMg4K834ERZUwYfYPV2A==
+pino-lambda@^2.0.0:
+  version "2.0.0"
+  resolved "https://registry.yarnpkg.com/pino-lambda/-/pino-lambda-2.0.0.tgz#41e2c8d9ac885cb38b3c57137efde59498c7553a"
+  integrity sha512-9qCiCOmO99WelLtKmRG3o3UnVItdjcs5snOdWYT0uiVNX3kh7PfGcXU/aDhtDYamH4pxz9t8yTXpnTMMjG8Uxg==
 
 pino-pretty@^4.7.1:
   version "4.7.1"

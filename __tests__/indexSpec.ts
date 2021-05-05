@@ -2,7 +2,6 @@ process.env.BUILDKITE_TOKEN = process.env.BUILDKITE_TOKEN || '__bk-token';
 process.env.BUILDKITE_ORG_NAME = process.env.BUILDKITE_ORG_NAME || 'some-org';
 process.env.GITHUB_TOKEN = process.env.GITHUB_TOKEN || '__gh-token';
 process.env.GITHUB_USER = process.env.GITHUB_USER || 'some-bot-user';
-process.env.AWS_EXECUTION_ENV = 'true';
 process.env.ENABLE_DEBUG = 'false';
 
 import type { APIGatewayProxyResult, Context } from 'aws-lambda';
