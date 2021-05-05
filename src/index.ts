@@ -378,11 +378,14 @@ ${requestedBuildData.buildNames
         );
       }
 
+      const repository =
+        eventBody.repository?.full_name ?? 'unknown repository';
+
       return done(null, {
         success: true,
         triggered: false,
         commented: false,
-        message: `Hooks working for ${eventBody.repository?.full_name}`,
+        message: `Hooks working for ${repository}`,
       });
     }
     default:
@@ -934,6 +937,7 @@ export function parseTriggerComment(
   commentBody: string,
 ): { buildNames: string[]; env: Dict<string> } {
   const match = commentBody.match(buildTriggerRegex);
+  // TODO: ensure that matches are mapped properly - either with named captures and/or non-capturing groups
   const pipelinesBlock = match ? match[0] : '';
   const envBlock = match ? match[3] : null;
 
