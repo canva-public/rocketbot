@@ -1,23 +1,30 @@
-const nock = require('nock');
-const path = require('path');
+import { ok } from 'assert';
+import { APIGatewayProxyResult, Context } from 'aws-lambda';
+import nock from 'nock';
+import * as path from 'path';
 
 process.env.BUILDKITE_TOKEN = process.env.BUILDKITE_TOKEN || '__bk-token';
 process.env.BUILDKITE_ORG_NAME = process.env.BUILDKITE_ORG_NAME || 'some-org';
 process.env.GITHUB_TOKEN = process.env.GITHUB_TOKEN || '__gh-token';
 process.env.GITHUB_USER = process.env.GITHUB_USER || 'some-bot-user';
 
-const githubControl = require('../src');
+import * as githubControl from '../src';
 
 // Enable this to record HTTP requests when adding a new test
 // nock.recorder.rec();
 
-function loadFixture(fixturePath) {
-  // eslint-disable-next-line global-require, import/no-dynamic-require
+function loadFixture(fixturePath: string) {
+  // eslint-disable-next-line global-require
   return require(path.join(__dirname, 'fixtures', fixturePath));
 }
 
-function assertLambdaResponse(response, expectedStatus, expectedBody) {
-  expect(+response.statusCode).toStrictEqual(expectedStatus);
+function assertLambdaResponse(
+  response: APIGatewayProxyResult | undefined,
+  expectedStatus: APIGatewayProxyResult['statusCode'],
+  expectedBody: githubControl.JSONResponse,
+) {
+  ok(response);
+  expect(response.statusCode).toStrictEqual(expectedStatus);
   expect(JSON.parse(response.body)).toStrictEqual(expectedBody);
 }
 
@@ -30,6 +37,10 @@ function assertNockDone() {
 }
 
 describe('github-control', () => {
+  let context: Context;
+  beforeEach(() => {
+    context = (jest.fn<Context, never>() as unknown) as Context;
+  });
   describe('general', () => {
     describe('comment matching', () => {
       it('should match a simple comment', () => {
@@ -308,7 +319,7 @@ describe('github-control', () => {
     it('should ignore anything that is not a POST', async () => {
       expect.hasAssertions();
       const lambdaRequest = loadFixture('lambda_request_GET');
-      await githubControl.handler(lambdaRequest, null, (err, res) => {
+      await githubControl.handler(lambdaRequest, context, (err, res) => {
         if (err) {
           throw err;
         }
@@ -321,7 +332,7 @@ describe('github-control', () => {
     it('should ignore unsupported github events', async () => {
       expect.hasAssertions();
       const lambdaRequest = loadFixture('commit_comment/lambda_request');
-      await githubControl.handler(lambdaRequest, null, (err, res) => {
+      await githubControl.handler(lambdaRequest, context, (err, res) => {
         if (err) {
           throw err;
         }
@@ -343,10 +354,11 @@ describe('github-control', () => {
         errorMessage = e.message;
       }
 
-      await expect(githubControl.handler(lambdaRequest)).rejects.toEqual({
-        statusCode: 400,
-        error: `Could not parse event body: ${errorMessage}`,
-      });   
+      await expect(
+        githubControl.handler(lambdaRequest, context, jest.fn()),
+      ).rejects.toStrictEqual(
+        new Error(`Could not parse event body: ${errorMessage}`),
+      );
     });
 
     it('should gracefully handle a failing buildkite request', async () => {
@@ -357,7 +369,7 @@ describe('github-control', () => {
         .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
         .reply(401, { message: 'Authorization failed' });
 
-      await githubControl.handler(lambdaRequest, null, (err, res) => {
+      await githubControl.handler(lambdaRequest, context, (err, res) => {
         if (err) {
           throw err;
         }
@@ -399,7 +411,7 @@ describe('github-control', () => {
           documentation_url: 'https://developer.github.com/v3',
         });
 
-      await githubControl.handler(lambdaRequest, null, (err, res) => {
+      await githubControl.handler(lambdaRequest, context, (err, res) => {
         if (err) {
           throw err;
         }
@@ -420,7 +432,7 @@ describe('github-control', () => {
           'Content-Type': 'text/plain',
         });
 
-      await githubControl.handler(lambdaRequest, null, (err, res) => {
+      await githubControl.handler(lambdaRequest, context, (err, res) => {
         if (err) {
           throw err;
         }
@@ -441,7 +453,7 @@ describe('github-control', () => {
       const body = 'This is no JSON';
 
       // The error messages differ in different node versions (e.g. 4.3.2 vs. 7.5.0)
-      let errorMessage;
+      let errorMessage: string;
       try {
         JSON.parse(body);
       } catch (e) {
@@ -454,7 +466,7 @@ describe('github-control', () => {
           'Content-Type': 'application/json',
         });
 
-      await githubControl.handler(lambdaRequest, null, (err, res) => {
+      await githubControl.handler(lambdaRequest, context, (err, res) => {
         if (err) {
           throw err;
         }
@@ -469,7 +481,7 @@ describe('github-control', () => {
       it('should properly handle a ping', async () => {
         expect.hasAssertions();
         const lambdaRequest = loadFixture('ping/lambda_request');
-        await githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -485,7 +497,7 @@ describe('github-control', () => {
       it('should complain if the events set up are not enough', async () => {
         expect.hasAssertions();
         const lambdaRequest = loadFixture('ping/lambda_request_no_events');
-        await githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -500,7 +512,7 @@ describe('github-control', () => {
       it('should ignore when pull requests change state except when they are opened', async () => {
         expect.hasAssertions();
         const lambdaRequest = loadFixture('pull_request/lambda_pr_assigned');
-        await githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -522,7 +534,7 @@ describe('github-control', () => {
           .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
           .reply(200, pipelinesReply);
 
-        await githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -579,7 +591,7 @@ describe('github-control', () => {
           )
           .reply(404, docSomePipeline);
 
-        await githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -613,7 +625,7 @@ describe('github-control', () => {
           .get('/v2/organizations/some-org/pipelines?page=2&per_page=100')
           .reply(200, pipelinesReplyPage2);
 
-        await githubControl.handler(lambdaRequest, null, (err) => {
+        await githubControl.handler(lambdaRequest, context, (err) => {
           if (err) {
             throw err;
           }
@@ -665,7 +677,7 @@ describe('github-control', () => {
           )
           .reply(200, updateCommentReply);
 
-        await githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -736,7 +748,7 @@ describe('github-control', () => {
 
         await githubControl.handler(
           lambdaRequestMultiBuild,
-          null,
+          context,
           (err, res) => {
             if (err) {
               throw err;
@@ -797,7 +809,7 @@ describe('github-control', () => {
           )
           .reply(200, updateCommentReply);
 
-        await githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -819,7 +831,7 @@ describe('github-control', () => {
           'issue_comment/lambda_request_by_bot',
         );
 
-        await githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -837,7 +849,7 @@ describe('github-control', () => {
           'issue_comment/lambda_request_comment_deleted',
         );
 
-        await githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -853,7 +865,7 @@ describe('github-control', () => {
         expect.hasAssertions();
         const lambdaRequest = loadFixture('issue_comment/lambda_request_no_pr');
 
-        await githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -904,7 +916,7 @@ describe('github-control', () => {
           )
           .reply(200, updateCommentReply);
 
-        await githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
@@ -925,7 +937,7 @@ describe('github-control', () => {
           'pull_request_review_comment/lambda_request_random_comment',
         );
 
-        await githubControl.handler(lambdaRequest, null, (err, res) => {
+        await githubControl.handler(lambdaRequest, context, (err, res) => {
           if (err) {
             throw err;
           }
