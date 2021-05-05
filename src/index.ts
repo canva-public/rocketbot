@@ -291,11 +291,8 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
           : Promise.resolve(eventBody.pull_request as PullRequest),
         Promise.resolve(eventBody.sender),
       ])
-        .then((dataArray) => {
-          const prData = dataArray[0];
-          const senderData = dataArray[1];
-          const senderName = senderData.name;
-          const senderEmail = senderData.email ?? undefined;
+        .then(([prData, senderData]) => {
+          const { name: senderName, email: senderEmail } = senderData;
 
           return buildkiteStartBuild(
             requestedBuildData,
@@ -303,7 +300,7 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
             commenter,
             commentUrl,
             senderName,
-            senderEmail,
+            senderEmail ?? undefined,
           )
             .then((bkDatas) =>
               bkDatas.map((bkData) => {
