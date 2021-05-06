@@ -82,7 +82,16 @@ export const handler: APIGatewayProxyHandler = async (
   context: Context /* For legacy testing only */,
   callback?: Callback /* For legacy testing only */,
 ): Promise<APIGatewayProxyResult> => {
-  logger.withRequest(event, context);
+  logger.withRequest(
+    {
+      ...event,
+      headers: {
+        ...(event.headers || {}),
+        'x-correlation-github-delivery': event.headers['X-GitHub-Delivery'],
+      },
+    },
+    context,
+  );
 
   log('Received event:', JSON.stringify(event, null, 2));
 
