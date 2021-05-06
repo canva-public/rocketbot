@@ -17,14 +17,14 @@ import type {
   WebhookEventName,
 } from '@octokit/webhooks-types';
 import { isTriggerComment, parseTriggerComment } from './trigger';
-import type { Endpoints } from '@octokit/types';
+import type { Endpoints, RequestError } from '@octokit/types';
 import type { IncomingHttpHeaders } from 'http';
 import { Octokit } from '@octokit/rest';
 import type { RequestOptions } from 'https';
 import { ok } from 'assert';
 import { parse } from 'url';
 import { request } from 'https';
-import pino from 'pino-lambda'; // eslint-disable-line sort-imports
+import pino from 'pino-lambda';
 
 type Unarray<T> = T extends Array<infer U> ? U : T;
 
@@ -46,8 +46,8 @@ const error = logger.error.bind(logger);
 
 log('Loading function');
 
-function assertNotEmpty<T>(thing: T | undefined): T {
-  ok(thing);
+function assertNotEmpty<T>(thing: T | undefined, errorMessage?: string): T {
+  ok(thing, new Error(errorMessage));
   return thing;
 }
 
@@ -82,7 +82,6 @@ class Http404Error extends HttpError {
 }
 
 const octokit = new Octokit({
-  // authStrategy: createTokenAuth,
   // TODO: use app auth here
   auth: GITHUB_TOKEN,
   log: {
@@ -109,7 +108,7 @@ export const handler: APIGatewayProxyHandler = async (
     context,
   );
 
-  log('Received event:', JSON.stringify(event, null, 2));
+  log('Received event: %o', event);
 
   const done = (err: Error | null, res?: JSONResponse) => {
     const ret: APIGatewayProxyResult = {
@@ -127,10 +126,9 @@ export const handler: APIGatewayProxyHandler = async (
     return done(new Error(`Unsupported method "${event.httpMethod}"`));
   }
 
-  ok(event.headers['X-GitHub-Event']);
-  const currentEventType = (event.headers[
-    'X-GitHub-Event'
-  ] as unknown) as WebhookEventName;
+  const currentEventType = assertNotEmpty(
+    event.headers['X-GitHub-Event'],
+  ) as WebhookEventName;
 
   function parseBody<T extends Schema>(event: APIGatewayProxyEvent) {
     ok(event.body);
@@ -172,6 +170,7 @@ export const handler: APIGatewayProxyHandler = async (
           Promise.all([
             pipelines,
             fetchDocumentationLinkMds(
+              eventBody.repository,
               eventBody.pull_request,
               BUILDKITE_ORG_NAME,
               pipelines,
@@ -332,7 +331,7 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
             .then((bkDatas) =>
               bkDatas.map((bkData) => {
                 const buildKiteWebUrl = bkData.web_url;
-                info(`Started Buildkite build ${buildKiteWebUrl}`);
+                info('Started Buildkite build %s', buildKiteWebUrl);
                 return {
                   url: buildKiteWebUrl,
                   number: bkData.number,
@@ -460,6 +459,11 @@ async function githubAddComment(
   pullRequest: PullRequest,
   body: string,
 ) {
+  log(
+    'adding comment to %s#%s',
+    `${repository.owner.login}/${repository.name}`,
+    pullRequest.number,
+  );
   return (
     await octokit.issues.createComment({
       owner: repository.owner.login,
@@ -506,92 +510,108 @@ function template(
 }
 
 /**
- * Fetch data to produce markdown linking to documentation a set of pipelines
+ * Fetch data to produce markdown linking to documentation a single pipeline
  *
+ * @param repository The repository this pull request belongs to
  * @param prData Data belonging to the PR which this markdown should be produced for.
  * @param orgSlug The Buildkite organization which this markdown should be produced for.
- * @param pipeline An array of pipeline objects.
- * @return A promise resolving to an array of strings.
+ * @param pipelines An array of pipeline objects.
  */
-function fetchDocumentationLinkMds(
+async function fetchDocumentationLinkMds(
+  repository: Repository,
   prData: PullRequest,
   orgSlug: string,
   pipelines: Pipeline[],
-) {
-  return Promise.all(
-    pipelines.map((pipeline) =>
-      fetchDocumentationLinkMd(prData, orgSlug, pipeline),
-    ),
-  );
-}
-
-/**
- * Fetch data to produce markdown linking to documentation a single pipeline
- *
- * @param prData Data belonging to the PR which this markdown should be produced for.
- * @param orgSlug The Buildkite organization which this markdown should be produced for.
- * @param pipeline An array of pipeline objects.
- * @return A promise resolving to a string.
- */
-async function fetchDocumentationLinkMd(
-  prData: PullRequest,
-  orgSlug: string,
-  pipeline: Pipeline,
-) {
-  const documentationUrl = await fetchDocumentationUrl(
+): Promise<string[]> {
+  const documentationUrls = await fetchDocumentationUrls(
+    repository,
     prData,
     orgSlug,
-    pipeline,
-  );
-  const documentationCreationLink = getDocumentationCreationLink(
-    prData,
-    orgSlug,
-    pipeline,
+    pipelines,
   );
 
-  return documentationUrl
-    ? `[:information_source:](${documentationUrl} "See more information")`
-    : `[:heavy_plus_sign:](${documentationCreationLink} "Add more information")`;
+  return pipelines.map((pipeline) => {
+    const documentationUrl = documentationUrls[pipeline.slug];
+    return documentationUrl
+      ? `[:information_source:](${documentationUrl} "See more information")`
+      : `[:heavy_plus_sign:](${getDocumentationCreationLink(
+          prData,
+          orgSlug,
+          pipeline,
+        )} "Add more information")`;
+  });
 }
 
 /**
  * Fetch the URL linking to documentation for a pipeline
  *
+ * @param repository The repository this pull request belongs to
  * @param prData Data belonging to the PR which this markdown should be produced for.
  * @param orgSlug The Buildkite organization which this markdown should be produced for.
- * @param pipeline An array of pipeline objects.
- * @return A promise resolving to a URL string or null.
+ * @param pipelines An array of pipeline objects.
  */
-async function fetchDocumentationUrl(
+async function fetchDocumentationUrls(
+  repository: Repository,
   prData: PullRequest,
   orgSlug: string,
-  pipeline: Pipeline,
-): Promise<string | null> {
-  const docOverrideUrl = (pipeline.env || {}).GH_CONTROL_README_URL;
-  if (docOverrideUrl) {
-    const mapping = {
-      COMMITISH: prData.head.sha,
-      ORG: prData.base.user.login,
-      REPO: prData.base.repo.name,
-    };
-    return template(docOverrideUrl, mapping);
-  }
+  pipelines: Pipeline[],
+): Promise<Record<string, string | null>> {
+  const result: Record<string, string | null> = {};
+  let contents: readonly Contents[] | undefined;
 
-  const candidateUrl =
-    '' +
-    `https://api.github.com/repos/${prData.head.repo.full_name}/contents` +
-    '/.buildkite/pipeline/description' +
-    `/${orgSlug}/${pipeline.slug}.md?ref=${prData.head.sha}`;
+  const pathPrefix = `.buildkite/pipeline/description/${orgSlug}`;
 
-  try {
-    const res = await githubApiRequest<Contents>(candidateUrl);
-    return res.html_url;
-  } catch (e) {
-    if (e instanceof Http404Error) {
-      return null;
+  for (const pipeline of pipelines) {
+    const docOverrideUrl = pipeline.env?.GH_CONTROL_README_URL;
+    if (docOverrideUrl) {
+      const mapping = {
+        COMMITISH: prData.head.sha,
+        ORG: repository.owner.login,
+        REPO: repository.name,
+      };
+      result[pipeline.slug] = template(docOverrideUrl, mapping);
+    } else {
+      if (!contents) {
+        try {
+          const response = await octokit.repos.getContent({
+            owner: repository.owner.login,
+            repo: repository.name,
+            path: pathPrefix,
+            ref: prData.head.sha,
+          });
+          contents = Array.isArray(response.data)
+            ? response.data
+            : [response.data];
+          log('contents of %s: %o', pathPrefix, contents);
+        } catch (e) {
+          if (!isOctokitRequestError(e) || e.status !== 404) {
+            // something else than Octokit failed or it's not a 404
+            throw e;
+          }
+          log(
+            'no pipeline documentation files found for %s/%s and org %s',
+            repository.owner.login,
+            repository.name,
+            orgSlug,
+          );
+          contents = [];
+        }
+      }
+      const mdFile = contents.find(
+        (file) => file.path === `${pathPrefix}/${pipeline.slug}.md`,
+      );
+      result[pipeline.slug] = mdFile?.html_url ?? null;
     }
-    throw e;
   }
+  return result;
+}
+
+/**
+ * Type guard for Octokit request errors
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isOctokitRequestError(e: any): e is RequestError {
+  return 'name' in e && 'status' in e && 'documentation_url' in e;
 }
 
 /**
@@ -615,7 +635,7 @@ async function fetchDocumentationUrl(
  * @param prData Data belonging to the PR which this markdown should be produced for.
  * @param orgSlug The Buildkite organization which this markdown should be produced for.
  * @param pipeline An array of pipeline objects.
- * @return {string} A link.
+ * @return A link.
  */
 function getDocumentationCreationLink(
   prData: PullRequest,
@@ -886,10 +906,8 @@ async function jsonRequest<T = Record<string, unknown>>(
  * @throws {Error} if the environment variable is not set
  */
 function assertEnv(name: string /* The name of the environment variable */) {
-  const value = process.env[name];
-  if (!value) {
-    /* istanbul ignore next */
-    throw new Error(`Required: "${name}" environment variable`);
-  }
-  return value;
+  return assertNotEmpty(
+    process.env[name],
+    `Required: "${name}" environment variable`,
+  );
 }
