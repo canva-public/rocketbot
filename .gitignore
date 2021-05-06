@@ -1,6 +1,10 @@
 .DS_Store
 /.eslintcache
+
+# A copy of env.json.template with meaningful values
 /env.json
+# A copy of a supported event from the CloudWatch console
+/event.json
 /coverage
 /coverage-report.tar.gz
 /dist

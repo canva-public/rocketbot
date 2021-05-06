@@ -2,7 +2,7 @@ process.env.BUILDKITE_TOKEN = process.env.BUILDKITE_TOKEN || '__bk-token';
 process.env.BUILDKITE_ORG_NAME = process.env.BUILDKITE_ORG_NAME || 'some-org';
 process.env.GITHUB_TOKEN = process.env.GITHUB_TOKEN || '__gh-token';
 process.env.GITHUB_USER = process.env.GITHUB_USER || 'some-bot-user';
-process.env.ENABLE_DEBUG = 'false';
+process.env.ENABLE_DEBUG = process.env.ENABLE_DEBUG || 'false';
 
 import type { APIGatewayProxyResult, Context } from 'aws-lambda';
 import { isTriggerComment, parseTriggerComment } from '../src/trigger';
@@ -375,22 +375,11 @@ describe('github-control', () => {
         .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
         .reply(200, pipelinesReply);
 
-      nock('https://api.github.com:443')
+      nock('https://api.github.com')
         .get(
-          '/repos/some-org/some-repo/contents/.buildkite/pipeline/description' +
-            '/some-org/some-pipeline.md' +
-            '?ref=c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ffe',
-        )
-        .reply(401, {
-          message: 'Bad credentials',
-          documentation_url: 'https://developer.github.com/v3',
-        });
-
-      nock('https://api.github.com:443')
-        .get(
-          '/repos/some-org/some-repo/contents/.buildkite/pipeline/description' +
-            '/some-org/some-pipeline-lite.md' +
-            '?ref=c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ffe',
+          `/repos/some-org/some-repo/contents/${encodeURIComponent(
+            '.buildkite/pipeline/description/some-org',
+          )}` + '?ref=c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ffe',
         )
         .reply(401, {
           message: 'Bad credentials',
@@ -403,7 +392,7 @@ describe('github-control', () => {
         }
         assertNockDone();
         assertLambdaResponse(res, 400, {
-          error: 'Request Failed. Status Code: 401',
+          error: 'Bad credentials',
         });
       });
     });
@@ -438,11 +427,9 @@ describe('github-control', () => {
 
       const body = 'This is no JSON';
 
-      nock('https://api.github.com:443')
-        .get('/users/some-user')
-        .reply(200, body, {
-          'Content-Type': 'application/json',
-        });
+      nock('https://api.github.com').get('/users/some-user').reply(200, body, {
+        'Content-Type': 'application/json',
+      });
 
       await expect(handler(lambdaRequest, context, jest.fn())).rejects.toThrow(
         /invalid json response body at https:\/\/api.github.com\/users\/some-user/,
@@ -532,36 +519,25 @@ describe('github-control', () => {
         const docSomePipelineLite = loadFixture(
           'pull_request/github/doc_some_pipeline_lite',
         );
-        const docSomePipeline = loadFixture(
-          'pull_request/github/doc_some_pipeline',
-        );
 
         nock('https://api.buildkite.com:443')
           .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
           .reply(200, pipelinesReply);
 
-        nock('https://api.github.com:443')
+        nock('https://api.github.com')
           .post(
             '/repos/some-org/some-repo/issues/1111111/comments',
             expectedCommentCreationBody,
           )
           .reply(201, createdCommentReply);
 
-        nock('https://api.github.com:443')
+        nock('https://api.github.com')
           .get(
-            '/repos/some-org/some-repo/contents/.buildkite/pipeline/description' +
-              '/some-org/some-pipeline-lite.md' +
-              '?ref=c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ffe',
+            `/repos/some-org/some-repo/contents/${encodeURIComponent(
+              '.buildkite/pipeline/description/some-org',
+            )}` + '?ref=c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ffe',
           )
           .reply(200, docSomePipelineLite);
-
-        nock('https://api.github.com:443')
-          .get(
-            '/repos/some-org/some-repo/contents/.buildkite/pipeline/description' +
-              '/some-org/some-pipeline.md' +
-              '?ref=c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ffe',
-          )
-          .reply(404, docSomePipeline);
 
         await handler(lambdaRequest, context, (err, res) => {
           if (err) {
@@ -627,11 +603,11 @@ describe('github-control', () => {
           'issue_comment/github/update_comment_body_expected',
         );
 
-        nock('https://api.github.com:443')
+        nock('https://api.github.com')
           .get('/users/some-user')
           .reply(200, usersReply);
 
-        nock('https://api.github.com:443')
+        nock('https://api.github.com')
           .get('/repos/some-org/some-repo/pulls/9500')
           .reply(200, pullRequestReply);
 
@@ -642,9 +618,9 @@ describe('github-control', () => {
           )
           .reply(201, buildkiteCreateBuildReply);
 
-        nock('https://api.github.com:443')
+        nock('https://api.github.com')
           .patch(
-            '/repos/some-org/some-repo/issues/comments/1111111',
+            '/repos/some-org/some-repo/issues/comments/279928810',
             expectedGithubUpdateCommentBody,
           )
           .reply(200, updateCommentReply);
@@ -689,11 +665,11 @@ describe('github-control', () => {
           'issue_comment/github/update_comment_body_expected_multiple',
         );
 
-        nock('https://api.github.com:443')
+        nock('https://api.github.com')
           .get('/users/some-user')
           .reply(200, usersReply);
 
-        nock('https://api.github.com:443')
+        nock('https://api.github.com')
           .get('/repos/some-org/some-repo/pulls/9500')
           .reply(200, pullRequestReply);
 
@@ -711,9 +687,9 @@ describe('github-control', () => {
           )
           .reply(201, buildkiteCreateBuildReplyOther);
 
-        nock('https://api.github.com:443')
+        nock('https://api.github.com')
           .patch(
-            '/repos/some-org/some-repo/issues/comments/1111111',
+            '/repos/some-org/some-repo/issues/comments/279928810',
             expectedGithubUpdateCommentBodyMultiple,
           )
           .reply(200, updateCommentReply);
@@ -755,11 +731,11 @@ describe('github-control', () => {
           'issue_comment/github/update_comment_body_expected_with_ENV',
         );
 
-        nock('https://api.github.com:443')
+        nock('https://api.github.com')
           .get('/users/some-user')
           .reply(200, usersReply);
 
-        nock('https://api.github.com:443')
+        nock('https://api.github.com')
           .get('/repos/some-org/some-repo/pulls/9500')
           .reply(200, pullRequestReply);
 
@@ -770,9 +746,9 @@ describe('github-control', () => {
           )
           .reply(201, buildkiteCreateBuildReply);
 
-        nock('https://api.github.com:443')
+        nock('https://api.github.com')
           .patch(
-            '/repos/some-org/some-repo/issues/comments/1111111',
+            '/repos/some-org/some-repo/issues/comments/279928810',
             expectedGithubUpdateCommentBody,
           )
           .reply(200, updateCommentReply);
@@ -866,7 +842,7 @@ describe('github-control', () => {
           'pull_request_review_comment/github/update_comment_body_expected',
         );
 
-        nock('https://api.github.com:443')
+        nock('https://api.github.com')
           .get('/users/some-user')
           .reply(200, usersReply);
 
@@ -877,9 +853,9 @@ describe('github-control', () => {
           )
           .reply(201, buildkiteCreateBuildReply);
 
-        nock('https://api.github.com:443')
+        nock('https://api.github.com')
           .patch(
-            '/repos/some-org/some-repo/pulls/comments/1111111',
+            '/repos/some-org/some-repo/pulls/comments/101434594',
             expectedGuithubUpdateCommentBody,
           )
           .reply(200, updateCommentReply);

@@ -30,6 +30,7 @@ type Contents = Unarray<
 >;
 type PullRequestData = Endpoints['GET /repos/{owner}/{repo}/pulls/{pull_number}']['response']['data'];
 type IssueCommentData = Endpoints['PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}']['response']['data'];
+type PullRequestReviewCommentData = Endpoints['PATCH /repos/{owner}/{repo}/pulls/comments/{comment_id}']['response']['data'];
 type UserData = Endpoints['GET /users/{username}']['response']['data'];
 type Dict<T> = Record<string, T>;
 
@@ -308,7 +309,7 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
         isIssueComment(currentEventType, eventBody)
           ? githubGetPullRequestDetails(
               eventBody.repository,
-              eventBody.issue.id,
+              eventBody.issue.number,
             )
           : Promise.resolve(eventBody.pull_request as PullRequest),
         (
@@ -370,6 +371,7 @@ ${requestedBuildData.buildNames
   .map(perBuildResponse)
   .join('\n')}${envParagraph}${repeatParagraph}`;
               return githubUpdateComment(
+                currentEventType,
                 eventBody.repository,
                 eventBody.comment.id,
                 updatedComment,
@@ -483,18 +485,22 @@ async function githubAddComment(
  * Updates a Github comment
  */
 async function githubUpdateComment(
+  eventName: 'pull_request_review_comment' | 'issue_comment',
   repository: Repository,
   commentId: number,
   body: string,
-): Promise<IssueCommentData> {
-  return (
-    await octokit.issues.updateComment({
-      body,
-      comment_id: commentId,
-      owner: repository.owner.login,
-      repo: repository.name,
-    })
-  ).data;
+): Promise<IssueCommentData | PullRequestReviewCommentData> {
+  const payload = {
+    body,
+    comment_id: commentId,
+    owner: repository.owner.login,
+    repo: repository.name,
+  };
+  if (eventName == 'pull_request_review_comment') {
+    return (await octokit.pulls.updateReviewComment(payload)).data;
+  } else {
+    return (await octokit.issues.updateComment(payload)).data;
+  }
 }
 
 /**
