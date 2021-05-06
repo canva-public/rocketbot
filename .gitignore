@@ -5,6 +5,7 @@
 /env.json
 # A copy of a supported event from the CloudWatch console
 /event.json
+/event.*.json
 /coverage
 /coverage-report.tar.gz
 /dist
