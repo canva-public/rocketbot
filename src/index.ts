@@ -9,6 +9,7 @@ import type {
   IssueComment,
   IssueCommentEvent,
   PullRequest,
+  Repository,
   Schema,
   User,
   WebhookEvent,
@@ -18,6 +19,7 @@ import type {
 import { isTriggerComment, parseTriggerComment } from './trigger';
 import type { Endpoints } from '@octokit/types';
 import type { IncomingHttpHeaders } from 'http';
+import { Octokit } from '@octokit/rest';
 import type { RequestOptions } from 'https';
 import { ok } from 'assert';
 import { parse } from 'url';
@@ -39,6 +41,8 @@ const logger = pino({
 
 const log = logger.debug.bind(logger);
 const info = logger.info.bind(logger);
+const warn = logger.warn.bind(logger);
+const error = logger.error.bind(logger);
 
 log('Loading function');
 
@@ -76,6 +80,18 @@ class Http404Error extends HttpError {
     this.name = 'Http404Error';
   }
 }
+
+const octokit = new Octokit({
+  // authStrategy: createTokenAuth,
+  // TODO: use app auth here
+  auth: GITHUB_TOKEN,
+  log: {
+    debug: log,
+    info,
+    warn,
+    error,
+  },
+});
 
 export const handler: APIGatewayProxyHandler = async (
   event: APIGatewayProxyEvent,
@@ -118,7 +134,7 @@ export const handler: APIGatewayProxyHandler = async (
 
   function parseBody<T extends Schema>(event: APIGatewayProxyEvent) {
     ok(event.body);
-    log('event body', event.body);
+    log('event body: %o', event.body);
     try {
       return (JSON.parse(event.body) as unknown) as T;
     } catch (e) {
@@ -137,6 +153,7 @@ export const handler: APIGatewayProxyHandler = async (
       }
       const repoSshUrl = eventBody.repository.ssh_url;
 
+      info('PR was opened');
       return buildkiteReadPipelines()
         .then((pipelineData) =>
           pipelineData
@@ -200,7 +217,8 @@ export const handler: APIGatewayProxyHandler = async (
               )
               .join('\n');
             return githubAddComment(
-              eventBody.pull_request.comments_url,
+              eventBody.repository,
+              eventBody.pull_request,
               `
 :tada: Almost merged!
 <details>
@@ -435,16 +453,21 @@ async function githubGetPullRequestDetails(
 }
 
 /**
- * Adds a comment to a given comment thread
- *
- * @param commentsUrl The fully qualified API URL to a github comments endpoint.
- * @param commentBody The content to use for the comment. Can contain markdown.
- * @return A promise resolving to the decoded JSON data of the Github API response
+ * Adds a comment to a given comment thread on a pull request
  */
-async function githubAddComment(commentsUrl: string, commentBody: string) {
-  const options = { method: 'POST' };
-  const body = { body: commentBody };
-  return githubApiRequest<IssueComment>(commentsUrl, options, body);
+async function githubAddComment(
+  repository: Repository,
+  pullRequest: PullRequest,
+  body: string,
+) {
+  return (
+    await octokit.issues.createComment({
+      owner: repository.owner.login,
+      repo: repository.name,
+      issue_number: pullRequest.number,
+      body,
+    })
+  ).data;
 }
 
 /**
@@ -497,7 +520,7 @@ function fetchDocumentationLinkMds(
 ) {
   return Promise.all(
     pipelines.map((pipeline) =>
-      fetchDocumentationLinkMd(prData, BUILDKITE_ORG_NAME, pipeline),
+      fetchDocumentationLinkMd(prData, orgSlug, pipeline),
     ),
   );
 }
@@ -653,6 +676,7 @@ async function githubApiRequest<T>(
  * @return A promise resolving to the decoded JSON data of the Buildkite API response
  */
 async function buildkiteReadPipelines() {
+  log('Reading pipelines');
   let pipelines: Pipeline[] = [];
 
   async function fetchNextPage(page: number) {
@@ -796,6 +820,11 @@ async function jsonRequest<T = Record<string, unknown>>(
   localOptions.headers = Object.assign(options.headers || {}, {
     'User-Agent': 'githubHook/2.0.1', // Note: this is mandatory for the GitHub API
     'Content-Type': 'application/json',
+  });
+
+  log('Request: %o', {
+    ...localOptions,
+    headers: { ...localOptions.headers, Authorization: '<redacted>' },
   });
 
   let body: string;

@@ -52,7 +52,8 @@
     "rollup": "^2.47.0",
     "ts-jest": "^26.5.4",
     "tslib": "^2.2.0",
-    "typescript": "^4.2.4"
+    "typescript": "^4.2.4",
+    "yaml-cfn": "^0.3.0"
   },
   "engines": {
     "node": "10.x || 12.x || 14.x"
@@ -62,6 +63,7 @@
     "*.{js,css,md,ts}": "prettier --write"
   },
   "dependencies": {
+    "@octokit/rest": "^18.5.3",
     "aws-lambda": "^1.0.6",
     "pino": "^6.11.3",
     "pino-lambda": "^2.0.0",

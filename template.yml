@@ -1,0 +1,21 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+
+Globals:
+  Function:
+    Timeout: 90
+    Environment:
+      Variables:
+        GITHUB_TOKEN: ~
+        GITHUB_USER: ~
+        BUILDKITE_TOKEN: ~
+        BUILDKITE_ORG_NAME: ~
+        ENABLE_DEBUG: ~
+
+Resources:
+  RocketBot:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Runtime: nodejs12.x
+      Handler: index.handler
+      CodeUri: dist

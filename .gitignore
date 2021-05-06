@@ -1,5 +1,6 @@
 .DS_Store
 /.eslintcache
+/env.json
 /coverage
 /coverage-report.tar.gz
 /dist
