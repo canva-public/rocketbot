@@ -438,29 +438,15 @@ describe('github-control', () => {
 
       const body = 'This is no JSON';
 
-      // The error messages differ in different node versions (e.g. 4.3.2 vs. 7.5.0)
-      let errorMessage: string;
-      try {
-        JSON.parse(body);
-      } catch (e) {
-        errorMessage = e.message;
-      }
-
       nock('https://api.github.com:443')
         .get('/users/some-user')
         .reply(200, body, {
           'Content-Type': 'application/json',
         });
 
-      await handler(lambdaRequest, context, (err, res) => {
-        if (err) {
-          throw err;
-        }
-        assertNockDone();
-        assertLambdaResponse(res, 400, {
-          error: errorMessage,
-        });
-      });
+      await expect(handler(lambdaRequest, context, jest.fn())).rejects.toThrow(
+        /invalid json response body at https:\/\/api.github.com\/users\/some-user/,
+      );
     });
 
     describe('ping', () => {
