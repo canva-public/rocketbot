@@ -10,7 +10,7 @@ import type { JSONResponse } from '../src';
 import { handler } from '../src';
 import { join } from 'path';
 import { ok } from 'assert';
-import nock from 'nock'; // eslint-disable-line sort-imports
+import nock from 'nock';
 
 // Enable this to record HTTP requests when adding a new test
 // nock.recorder.rec();

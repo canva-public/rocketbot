@@ -6,12 +6,10 @@ import type {
   Context,
 } from 'aws-lambda';
 import type {
-  IssueComment,
   IssueCommentEvent,
   PullRequest,
   Repository,
   Schema,
-  User,
   WebhookEvent,
   WebhookEventMap,
   WebhookEventName,
@@ -22,7 +20,6 @@ import type { IncomingHttpHeaders } from 'http';
 import { Octokit } from '@octokit/rest';
 import type { RequestOptions } from 'https';
 import { ok } from 'assert';
-import { parse } from 'url';
 import { request } from 'https';
 import pino from 'pino-lambda';
 
@@ -31,7 +28,9 @@ type Unarray<T> = T extends Array<infer U> ? U : T;
 type Contents = Unarray<
   Endpoints['GET /repos/{owner}/{repo}/contents/{path}']['response']['data']
 >;
-
+type PullRequestData = Endpoints['GET /repos/{owner}/{repo}/pulls/{pull_number}']['response']['data'];
+type IssueCommentData = Endpoints['PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}']['response']['data'];
+type UserData = Endpoints['GET /users/{username}']['response']['data'];
 type Dict<T> = Record<string, T>;
 
 const logger = pino({
@@ -256,10 +255,6 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
     }
     case 'issue_comment':
     case 'pull_request_review_comment': {
-      const isIssueComment = (
-        eventName: WebhookEventName,
-        event: WebhookEvent,
-      ): event is IssueCommentEvent => eventName === 'issue_comment';
       const eventBody = parseBody<WebhookEventMap[typeof currentEventType]>(
         event,
       );
@@ -309,17 +304,20 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
         {},
       );
 
-      return Promise.all<PullRequest, User>([
+      return Promise.all<PullRequestData | PullRequest, UserData>([
         isIssueComment(currentEventType, eventBody)
           ? githubGetPullRequestDetails(
-              assertNotEmpty(eventBody.issue.pull_request?.url), // TODO: handle empty case gracefully
+              eventBody.repository,
+              eventBody.issue.id,
             )
           : Promise.resolve(eventBody.pull_request as PullRequest),
-        githubApiRequest<User>(eventBody.sender.url),
+        (
+          await octokit.users.getByUsername({
+            username: eventBody.sender.login,
+          })
+        ).data,
       ])
-        .then(([prData, senderData]) => {
-          const { name: senderName, email: senderEmail } = senderData;
-
+        .then(([prData, { name: senderName, email: senderEmail }]) => {
           return buildkiteStartBuild(
             requestedBuildData,
             prData,
@@ -371,7 +369,11 @@ ${requestedBuildData.buildNames
 ${requestedBuildData.buildNames
   .map(perBuildResponse)
   .join('\n')}${envParagraph}${repeatParagraph}`;
-              return githubUpdateComment(eventBody.comment.url, updatedComment);
+              return githubUpdateComment(
+                eventBody.repository,
+                eventBody.comment.id,
+                updatedComment,
+              );
             })
             .then((commentData) => {
               info(`Updated comment ${commentData.html_url} with build URL`);
@@ -446,9 +448,16 @@ function urlPart(sshUri: string) {
  * Retrieves details about a pull request
  */
 async function githubGetPullRequestDetails(
-  prUrl: string /* The fully qualified API URL to a Github comment */,
-) {
-  return githubApiRequest<PullRequest>(prUrl);
+  repository: Repository,
+  pullNumber: number,
+): Promise<PullRequestData> {
+  return (
+    await octokit.pulls.get({
+      owner: repository.owner.login,
+      repo: repository.name,
+      pull_number: pullNumber,
+    })
+  ).data;
 }
 
 /**
@@ -459,11 +468,7 @@ async function githubAddComment(
   pullRequest: PullRequest,
   body: string,
 ) {
-  log(
-    'adding comment to %s#%s',
-    `${repository.owner.login}/${repository.name}`,
-    pullRequest.number,
-  );
+  log('adding comment to %s#%s', repository.full_name, pullRequest.number);
   return (
     await octokit.issues.createComment({
       owner: repository.owner.login,
@@ -476,15 +481,20 @@ async function githubAddComment(
 
 /**
  * Updates a Github comment
- *
- * @param commentUrl The fully qualified API URL to a github comment endpoint.
- * @param newBody The new content to use for the comment. Can contain markdown.
- * @return A promise resolving to the decoded JSON data of the Github API response
  */
-async function githubUpdateComment(commentUrl: string, newBody: string) {
-  const options = { method: 'PATCH' };
-  const body = { body: newBody };
-  return githubApiRequest<IssueComment>(commentUrl, options, body);
+async function githubUpdateComment(
+  repository: Repository,
+  commentId: number,
+  body: string,
+): Promise<IssueCommentData> {
+  return (
+    await octokit.issues.updateComment({
+      body,
+      comment_id: commentId,
+      owner: repository.owner.login,
+      repo: repository.name,
+    })
+  ).data;
 }
 
 /**
@@ -589,9 +599,8 @@ async function fetchDocumentationUrls(
             throw e;
           }
           log(
-            'no pipeline documentation files found for %s/%s and org %s',
-            repository.owner.login,
-            repository.name,
+            'no pipeline documentation files found for repository %s and Buildkite org %s',
+            repository.full_name,
             orgSlug,
           );
           contents = [];
@@ -663,31 +672,6 @@ function zip<S, T>(xs: S[], ys: T[]): [S, T][] {
   return xs.map((x, i) => [x, ys[i]]);
 }
 
-/**
- * Makes an HTTP request against the given Github API URL
- *
- * @param ghUrl The fully qualified URL of the Github API endpoint
- * @param additionalOptions An option object according to the 'https' node module.
- *                                    Conflicting keys will overwrite any default options.
- * @param requestBody The JSON body to send to Github
- * @return A promise resolving to the decoded JSON data of the Github API response
- */
-async function githubApiRequest<T>(
-  ghUrl: string,
-  additionalOptions?: Partial<RequestOptions>,
-  requestBody?: Record<string, unknown>,
-): Promise<T> {
-  const options = Object.assign(
-    parse(ghUrl),
-    {
-      auth: `${GITHUB_USER}:${GITHUB_TOKEN}`,
-    },
-    additionalOptions || {},
-  );
-  const { body } = await jsonRequest<T>(options, requestBody);
-  return body;
-}
-
 /* Buildkite API helper functions */
 
 /**
@@ -744,7 +728,7 @@ type Pipeline = {
  */
 async function buildkiteStartBuild(
   buildData: { buildNames: string[]; env: NodeJS.ProcessEnv },
-  prData: PullRequest,
+  prData: PullRequestData | PullRequest,
   requester: string,
   commentUrl: string,
   senderName?: string,
@@ -910,4 +894,14 @@ function assertEnv(name: string /* The name of the environment variable */) {
     process.env[name],
     `Required: "${name}" environment variable`,
   );
+}
+
+/**
+ * Type guard for issue comments
+ */
+function isIssueComment(
+  eventName: WebhookEventName,
+  event: WebhookEvent,
+): event is IssueCommentEvent {
+  return eventName === 'issue_comment';
 }
