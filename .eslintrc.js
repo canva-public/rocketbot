@@ -10,7 +10,4 @@ module.exports = {
   env: {
     node: true,
   },
-  rules: {
-    'sort-imports': ['error'],
-  },
 };

@@ -1,2 +1,5 @@
 coverage
 dist
+/env.json
+/event.json
+/event.*.json
