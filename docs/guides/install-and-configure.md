@@ -2,6 +2,7 @@
 
 ## Credentials
 
+Because RocketBot is the glue between Github and Buildkite it will need credentials for both systems.
 ### On the Buildkite side
 
 You need a Buildkite API key to access the following scopes:
