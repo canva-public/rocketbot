@@ -22,6 +22,7 @@ import type { RequestOptions } from 'https';
 import { ok } from 'assert';
 import { request } from 'https';
 import pino from 'pino-lambda';
+import { createAppAuth } from '@octokit/auth-app';
 
 type Unarray<T> = T extends Array<infer U> ? U : T;
 
@@ -62,8 +63,39 @@ export type JSONResponse =
 // needs: read_builds, write_builds, read_pipelines
 const BUILDKITE_TOKEN = assertEnv('BUILDKITE_TOKEN');
 const BUILDKITE_ORG_NAME = assertEnv('BUILDKITE_ORG_NAME');
-const GITHUB_TOKEN = assertEnv('GITHUB_TOKEN');
-const GITHUB_USER = assertEnv('GITHUB_USER');
+
+function getOctokit() {
+  const isApp = !!process.env.GITHUB_APP_APP_ID;
+  const octokitBaseConfig = {
+    log: {
+      debug: log,
+      info,
+      warn,
+      error,
+    },
+  };
+
+  if (isApp) {
+    log('Using app credentials');
+    return new Octokit({
+      ...octokitBaseConfig,
+      authStrategy: createAppAuth,
+      auth: {
+        appId: assertEnv('GITHUB_APP_APP_ID'),
+        privateKey: assertEnv('GITHUB_APP_PRIVATE_KEY'),
+        installationId: assertEnv('GITHUB_APP_INSTALLATION_ID'),
+      },
+    });
+  } else {
+    log('Using user credentials');
+    return new Octokit({
+      ...octokitBaseConfig,
+      auth: assertEnv('GITHUB_TOKEN'),
+    });
+  }
+}
+
+const octokit = getOctokit();
 
 class HttpError extends Error {
   constructor(message: string) {
@@ -80,17 +112,6 @@ class Http404Error extends HttpError {
     this.name = 'Http404Error';
   }
 }
-
-const octokit = new Octokit({
-  // TODO: use app auth here
-  auth: GITHUB_TOKEN,
-  log: {
-    debug: log,
-    info,
-    warn,
-    error,
-  },
-});
 
 export const handler: APIGatewayProxyHandler = async (
   event: APIGatewayProxyEvent,
@@ -112,7 +133,7 @@ export const handler: APIGatewayProxyHandler = async (
 
   const done = (err: Error | null, res?: JSONResponse) => {
     const ret: APIGatewayProxyResult = {
-      statusCode: err ? 400 : 200,
+      statusCode: err ? (isOctokitRequestError(err) ? err.status : 400) : 200,
       body: err ? JSON.stringify({ error: err.message }) : JSON.stringify(res),
       headers: {
         'Content-Type': 'application/json',
@@ -259,12 +280,6 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
       const eventBody = parseBody<WebhookEventMap[typeof currentEventType]>(
         event,
       );
-      const commenter = eventBody.sender.login;
-
-      if (commenter === GITHUB_USER) {
-        info('Bot user commented, nothing to do here');
-        return done(null, { success: true, triggered: false });
-      }
 
       if (eventBody.action === 'deleted') {
         info('Comment was deleted, nothing to do here');
@@ -288,6 +303,7 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
 
       const requestedBuildData = parseTriggerComment(eventBody.comment.body);
       const commentUrl = eventBody.comment.url;
+      const commenter = eventBody.sender.login;
       info(
         `@${commenter} requested "${requestedBuildData.buildNames.join(
           ',',
@@ -589,6 +605,10 @@ async function fetchDocumentationUrls(
     } else {
       if (!contents) {
         try {
+          // Caveat: this only fetches the first 1000 files
+          // if there are other files nested in between the pipeline mds
+          // or there are more than 1000 documented pipelines we will need
+          // paging here
           const response = await octokit.repos.getContent({
             owner: repository.owner.login,
             repo: repository.name,

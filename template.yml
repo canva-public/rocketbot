@@ -7,7 +7,9 @@ Globals:
     Environment:
       Variables:
         GITHUB_TOKEN: ~
-        GITHUB_USER: ~
+        GITHUB_APP_PRIVATE_KEY: ~
+        GITHUB_APP_INSTALLATION_ID: ~
+        GITHUB_APP_APP_ID: ~
         BUILDKITE_TOKEN: ~
         BUILDKITE_ORG_NAME: ~
         ENABLE_DEBUG: ~
