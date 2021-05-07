@@ -23,6 +23,7 @@ import { ok } from 'assert';
 import { request } from 'https';
 import pino from 'pino-lambda';
 import { createAppAuth } from '@octokit/auth-app';
+import { SecretsManager } from 'aws-sdk';
 
 type Unarray<T> = T extends Array<infer U> ? U : T;
 
@@ -60,12 +61,75 @@ export type JSONResponse =
       | { message: string }
     ));
 
-// needs: read_builds, write_builds, read_pipelines
-const BUILDKITE_TOKEN = assertEnv('BUILDKITE_TOKEN');
-const BUILDKITE_ORG_NAME = assertEnv('BUILDKITE_ORG_NAME');
+type Config = {
+  /** needs: read_builds, write_builds, read_pipelines */
+  BUILDKITE_TOKEN: string;
+  BUILDKITE_ORG_NAME: string;
+  ENABLE_DEBUG?: string;
+} & (
+  | {
+      GITHUB_APP_APP_ID: string;
+      GITHUB_APP_PRIVATE_KEY: string;
+      GITHUB_APP_INSTALLATION_ID: string;
+    }
+  | { /** needs write access */ GITHUB_TOKEN: string }
+);
 
-function getOctokit() {
-  const isApp = !!process.env.GITHUB_APP_APP_ID;
+function parseConfig(value: string): Config {
+  const config = JSON.parse(value);
+
+  return (
+    config &&
+    typeof config === 'object' &&
+    'BUILDKITE_TOKEN' in config &&
+    'BUILDKITE_ORG_NAME' in config &&
+    ('GITHUB_TOKEN' in config ||
+      ('GITHUB_APP_APP_ID' in config &&
+        'GITHUB_APP_PRIVATE_KEY' in config &&
+        'GITHUB_APP_INSTALLATION_ID' in config))
+  );
+}
+
+let config: Config | undefined;
+async function getConfig(): Promise<Config> {
+  if (config) {
+    return config;
+  }
+  if (process.env.SECRETSMANAGER_CONFIG_KEY) {
+    // if we have a secretsmanager config key, we use that to load the config
+    const SecretId = assertEnv('SECRETSMANAGER_CONFIG_KEY');
+
+    const client = new SecretsManager();
+
+    const value = await client.getSecretValue({ SecretId }).promise();
+    config = parseConfig(assertNotEmpty(value.SecretString));
+  } else {
+    const base = {
+      BUILDKITE_TOKEN: assertEnv('BUILDKITE_TOKEN'),
+      BUILDKITE_ORG_NAME: assertEnv('BUILDKITE_ORG_NAME'),
+      ENABLE_DEBUG: process.env.ENABLE_DEBUG,
+    };
+
+    if (process.env.GITHUB_APP_APP_ID) {
+      config = {
+        ...base,
+        GITHUB_APP_APP_ID: assertEnv('GITHUB_APP_APP_ID'),
+        GITHUB_APP_PRIVATE_KEY: assertEnv('GITHUB_APP_PRIVATE_KEY'),
+        GITHUB_APP_INSTALLATION_ID: assertEnv('GITHUB_APP_INSTALLATION_ID'),
+      };
+    } else {
+      config = {
+        ...base,
+        GITHUB_TOKEN: assertEnv('GITHUB_TOKEN'),
+      };
+    }
+  }
+  return config;
+}
+
+async function getOctokit() {
+  const config = await getConfig();
+
   const octokitBaseConfig = {
     log: {
       debug: log,
@@ -75,22 +139,22 @@ function getOctokit() {
     },
   };
 
-  if (isApp) {
+  if ('GITHUB_APP_APP_ID' in config) {
     log('Using app credentials');
     return new Octokit({
       ...octokitBaseConfig,
       authStrategy: createAppAuth,
       auth: {
-        appId: assertEnv('GITHUB_APP_APP_ID'),
-        privateKey: assertEnv('GITHUB_APP_PRIVATE_KEY'),
-        installationId: assertEnv('GITHUB_APP_INSTALLATION_ID'),
+        appId: config.GITHUB_APP_APP_ID,
+        privateKey: config.GITHUB_APP_PRIVATE_KEY,
+        installationId: config.GITHUB_APP_INSTALLATION_ID,
       },
     });
   } else {
     log('Using user credentials');
     return new Octokit({
       ...octokitBaseConfig,
-      auth: assertEnv('GITHUB_TOKEN'),
+      auth: config.GITHUB_TOKEN,
     });
   }
 }
