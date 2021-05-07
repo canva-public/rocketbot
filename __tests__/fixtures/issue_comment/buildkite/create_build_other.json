@@ -9,6 +9,9 @@
   "branch": "some-user/some-branch",
   "tag": null,
   "env": {
+    "BUILDKITE_PULL_REQUEST": "9500",
+    "BUILDKITE_PULL_REQUEST_BASE_BRANCH": "master",
+    "BUILDKITE_PULL_REQUEST_REPO": "git@github.com:some-org/some-repo.git",
     "GH_CONTROL_BUILD": "true",
     "GH_CONTROL_PR_NUMBER": "9500",
     "GH_CONTROL_GITHUB_USER": "some-user",

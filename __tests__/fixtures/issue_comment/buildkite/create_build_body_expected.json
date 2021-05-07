@@ -8,12 +8,15 @@
     "email": "some-user@some-domain.com"
   },
   "env": {
+    "BUILDKITE_PULL_REQUEST": "9500",
+    "BUILDKITE_PULL_REQUEST_BASE_BRANCH": "master",
+    "BUILDKITE_PULL_REQUEST_REPO": "git@github.com:some-org/some-repo.git",
     "GH_CONTROL_BUILD": true,
     "GH_CONTROL_GITHUB_USER": "some-user",
     "GH_CONTROL_GITHUB_USER_EMAIL": "some-user@some-domain.com",
     "GH_CONTROL_GITHUB_USER_NAME": "Some User",
     "GH_CONTROL_GITHUB_TRIGGER_COMMENT_URL": "https://api.github.com/repos/some-org/some-repo/issues/comments/1111111",
-    "GH_CONTROL_PR_NUMBER": 9500,
+    "GH_CONTROL_PR_NUMBER": "9500",
     "GH_CONTROL_PR_TITLE": "test",
     "GH_CONTROL_PR_BASE_BRANCH": "master",
     "GH_CONTROL_PR_BASE_REPO": "some-org/some-repo"
