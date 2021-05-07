@@ -6,8 +6,6 @@
 
 You need a Buildkite API key to access the following scopes:
 
-The will will need access to the scopes:
-
 - `read_builds`
 - `write_builds`
 - `read_pipelines`
