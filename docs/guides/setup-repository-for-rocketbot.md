@@ -13,7 +13,6 @@ To set up a repository to work with RocketBot:
    - **Pull request review comment**
 1. Select **Active**.
 1. Click **Add webhook**.
-1. Ensure the github user used for RocketBot has write access to the repository. Write access is required for posting and updating comments, as well as reading PR statuses.
 
 ## Enable a Buildkite pipeline to display in the list of available builds
 
