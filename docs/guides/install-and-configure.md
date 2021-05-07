@@ -35,7 +35,7 @@ Make the following environment variables available to your Lambda function:
 - `BUILDKITE_TOKEN`
 - `BUILDKITE_ORG_NAME` (the URL part of `https://buildkite.com/<your-org>/`)
 
-Depending on which Github way you chooe, you will need to expose either:
+Depending on which GitHub way you choose to configure RocketBot, you need to expose either:
 
 - `GITHUB_APP_APP_ID` (see above)
 - `GITHUB_APP_PRIVATE_KEY` (see above)
