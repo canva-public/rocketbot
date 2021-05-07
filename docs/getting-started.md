@@ -79,7 +79,7 @@ To use a GitHub saved reply:
 
 After you've learned how to display and run RocketBot builds for your PR, see the following additional sources of information:
 
-- [Installing and configuring RocketBot](./guides/install-and-configure.md).
+- [Install and configure RocketBot](./guides/install-and-configure.md).
 - [Set up a repository to work with RocketBot](./guides/setup-repository-for-rocketbot.md).
 - [Pass variables to your RocketBot builds](./guides/pass-in-variables.md).
 - [View or add documentation for RocketBot builds](./guides/view-add-build-documentation.md).
