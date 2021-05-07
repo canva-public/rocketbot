@@ -589,6 +589,10 @@ async function fetchDocumentationUrls(
     } else {
       if (!contents) {
         try {
+          // Caveat: this only fetches the first 1000 files
+          // if there are other files nested in between the pipeline mds
+          // or there are more than 1000 documented pipelines we will need
+          // paging here
           const response = await octokit.repos.getContent({
             owner: repository.owner.login,
             repo: repository.name,
