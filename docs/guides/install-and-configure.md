@@ -14,7 +14,7 @@ The will will need access to the scopes:
 
 it only needs access to the REST endpoint, no GraphQL needed.
 
-### On the github side
+### On the GitHub side
 
 There are two ways to configure RocketBot:
 
