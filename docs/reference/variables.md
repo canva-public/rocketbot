@@ -13,4 +13,4 @@ The following table lists the variables available to any RocketBot build.
 | `GH_CONTROL_PR_TITLE`                   | Pull request title                                           |
 | `GH_CONTROL_PR_BASE_BRANCH`             | Pull request base branch                                     |
 | `GH_CONTROL_PR_BASE_REPO`               | Pull request base repository                                 |
-| `GH_CONTROL_USER_ENV_\*`                | Custom user-defined variables (prefixed)                     |
+| `GH_CONTROL_USER_ENV_*`                 | Custom user-defined variables (prefixed)                     |
