@@ -12,7 +12,7 @@ The will will need access to the scopes:
 - `write_builds`
 - `read_pipelines`
 
-it only needs access to the REST endpoint, no GraphQL needed.
+The Buildkite API key only needs access to the REST endpoint. It doesn't need GraphQL access.
 
 ### On the GitHub side
 
