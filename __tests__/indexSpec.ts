@@ -1,7 +1,6 @@
 process.env.BUILDKITE_TOKEN = process.env.BUILDKITE_TOKEN || '__bk-token';
 process.env.BUILDKITE_ORG_NAME = process.env.BUILDKITE_ORG_NAME || 'some-org';
 process.env.GITHUB_TOKEN = process.env.GITHUB_TOKEN || '__gh-token';
-process.env.GITHUB_USER = process.env.GITHUB_USER || 'some-bot-user';
 process.env.ENABLE_DEBUG = process.env.ENABLE_DEBUG || 'false';
 
 import type { APIGatewayProxyResult, Context } from 'aws-lambda';
@@ -391,7 +390,7 @@ describe('github-control', () => {
           throw err;
         }
         assertNockDone();
-        assertLambdaResponse(res, 400, {
+        assertLambdaResponse(res, 401, {
           error: 'Bad credentials',
         });
       });
@@ -764,25 +763,6 @@ describe('github-control', () => {
             commented: false,
             updatedCommentUrl:
               'https://github.com/some-org/some-repo/pull/9500#issuecomment-279928810',
-          });
-        });
-      });
-
-      it('should ignore bot comments', async () => {
-        expect.hasAssertions();
-        // The user in this mock request must match the bot user above
-        const lambdaRequest = loadFixture(
-          'issue_comment/lambda_request_by_bot',
-        );
-
-        await handler(lambdaRequest, context, (err, res) => {
-          if (err) {
-            throw err;
-          }
-          assertNockDone();
-          assertLambdaResponse(res, 200, {
-            success: true,
-            triggered: false,
           });
         });
       });

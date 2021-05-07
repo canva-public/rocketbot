@@ -10,6 +10,8 @@ const defaultConfig = {
   plugins: [
     nodeResolve({
       preferBuiltins: true,
+      // see https://github.com/octokit/auth-app.js/issues/59#issuecomment-833985009
+      mainFields: ['main', 'module'],
     }),
     typescript(),
     commonjs(),
