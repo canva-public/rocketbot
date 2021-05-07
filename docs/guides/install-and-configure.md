@@ -4,7 +4,7 @@
 
 ### On the Buildkite side
 
-You will need a Buildkite API key
+You need a Buildkite API key to access the following scopes:
 
 The will will need access to the scopes:
 
