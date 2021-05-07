@@ -20,13 +20,13 @@ There are two ways to configure RocketBot:
 - Through a user: Ensure the RocketBot GitHub user has write access to the repository. Write access is required for posting and updating comments, as well as reading PR statuses.
 - Through an app (recommended):
 
-- Create a new github app and add the following permissions:
-  - `Contents`: `Read only`
-  - `Issues`: `Read & write`
-  - `Pull requests`: `Read & write`
-- Grab the app ID and produce a private key file
-- Install the app in your organization
-- Grab the installation ID from `https://github.com/organizations/<org>/settings/installations/<installationId>`
+  1. Create a new GitHub app and add the following permissions:
+     - `Contents`: `Read only`
+     - `Issues`: `Read & write`
+     - `Pull requests`: `Read & write`
+  1. Retrieve the app ID and produce a private key file.
+  1. Install the app in your organization.
+  1. Retrieve the installation ID from `https://github.com/organizations/<org>/settings/installations/<installationId>`.
 
 ## Configuration
 
