@@ -17,7 +17,7 @@ The Buildkite API key only needs access to the REST endpoint. It doesn't need Gr
 
 There are two ways to configure RocketBot:
 
-1. Via a user: Ensure the github user used for RocketBot has write access to the repository. Write access is required for posting and updating comments, as well as reading PR statuses.
+- Through a user: Ensure the RocketBot GitHub user has write access to the repository. Write access is required for posting and updating comments, as well as reading PR statuses.
 2. Via app (recommended):
 
 - Create a new github app and add the following permissions:
