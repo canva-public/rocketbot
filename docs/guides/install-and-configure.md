@@ -30,7 +30,7 @@ There are two ways to configure RocketBot:
 
 ## Configuration
 
-Make the following environment variables available to your lambda:
+Make the following environment variables available to your Lambda function:
 
 - `BUILDKITE_TOKEN`
 - `BUILDKITE_ORG_NAME` (the URL part of `https://buildkite.com/<your-org>/`)
