@@ -1,29 +1,22 @@
-import type { IncomingHttpHeaders } from 'http';
-import type { RequestOptions } from 'https';
-import { request } from 'https';
 import type { Logger } from 'pino';
 import type { Config } from './config';
 import type { RestEndpointMethodTypes } from '@octokit/rest';
 import type { PullRequest } from '@octokit/webhooks-types';
+import got from 'got';
+import memoizeOne from 'memoize-one';
 
 type Dict<T> = Record<string, T>;
 type PullRequestData = RestEndpointMethodTypes['pulls']['get']['response']['data'];
 
-class HttpError extends Error {
-  constructor(message: string) {
-    super(message);
-
-    this.name = 'HttpError';
-  }
-}
-
-class Http404Error extends HttpError {
-  constructor(message: string) {
-    super(message);
-
-    this.name = 'Http404Error';
-  }
-}
+const gotInstance = memoizeOne((config: Config) => {
+  return got.extend({
+    prefixUrl: `https://api.buildkite.com/v2/organizations/${config.BUILDKITE_ORG_NAME}`,
+    headers: {
+      Authorization: `Bearer ${config.BUILDKITE_TOKEN}`,
+    },
+    responseType: 'json',
+  });
+});
 
 /**
  * Returns all defined Buildkite pipelines in the current organization
@@ -33,25 +26,12 @@ export async function buildkiteReadPipelines(
   config: Config,
 ): Promise<Pipeline[]> {
   logger.debug('Reading pipelines');
-  let pipelines: Pipeline[] = [];
 
-  async function fetchNextPage(page: number) {
-    const { body, headers } = await buildkiteApiRequest<Pipeline>(
-      logger,
-      config,
-      `pipelines?page=${page}&per_page=100`,
-    );
-    pipelines = pipelines.concat(body);
-    return headers.link && headers.link.indexOf('rel="next"') !== -1;
-  }
+  const {
+    paginate: { all },
+  } = gotInstance(config);
 
-  let currentPage = 1;
-
-  // eslint-disable-next-line no-await-in-loop
-  while (await fetchNextPage(currentPage)) {
-    currentPage += 1;
-  }
-  return pipelines;
+  return all<Pipeline>('pipelines?page=1&per_page=100');
 }
 
 /**
@@ -108,16 +88,12 @@ export async function buildkiteStartBuild(
       GH_CONTROL_PR_BASE_REPO: prData.base.repo.full_name,
     },
   };
+  const { post } = gotInstance(config);
   return Promise.all(
     buildData.buildNames.map(async (buildName) => {
-      const { body } = await buildkiteApiRequest<Build>(
-        logger,
-        config,
-
-        `pipelines/${buildName}/builds`,
-        { method: 'POST' },
-        requestBody,
-      );
+      const { body } = await post<Build>(`pipelines/${buildName}/builds`, {
+        json: requestBody,
+      });
       return body;
     }),
   );
@@ -131,109 +107,3 @@ export type Build = {
   number: number;
   scheduled_at: string;
 };
-
-/**
- * Makes an HTTP request against the Buildkite API v2.
- *
- * @param apiPathNoOrg The path of the endpoint behind the
- *                              organizational part without preceding slash
- * @param additionalOptions An option object according to the 'https' node module.
- *                                    Conflicting keys will overwrite any default options.
- * @param body The JSON body to send to Buildkite
- * @return A promise resolving to an object { body, headers},
- *                   where body is the decoded JSON data of the Buildkite API response and headers
- *                   is a map
- */
-async function buildkiteApiRequest<T>(
-  logger: Logger,
-  config: Config,
-  apiPathNoOrg: string,
-  additionalOptions?: Partial<RequestOptions>,
-  body?: Record<string, unknown>,
-) {
-  const options = {
-    hostname: 'api.buildkite.com',
-    path: `/v2/organizations/${config.BUILDKITE_ORG_NAME}/${apiPathNoOrg}`,
-    headers: {
-      Authorization: `Bearer ${config.BUILDKITE_TOKEN}`,
-    },
-    ...(additionalOptions || {}),
-  };
-  return jsonRequest<T>(logger, options, body);
-}
-
-/* General helper functions */
-
-/**
- * Makes an HTTP request against a given endpoint
- *
- * @return A promise resolving to an object { body, headers }
- *                   where body is the decoded JSON data of the endpoint response and headers
- *                   is a map
- */
-async function jsonRequest<T = Record<string, unknown>>(
-  logger: Logger,
-  options: Partial<RequestOptions>,
-  jsonBody?: Record<string, unknown>,
-): Promise<{ body: T; headers: IncomingHttpHeaders }> {
-  const localOptions: RequestOptions = { ...options };
-  localOptions.headers = Object.assign(options.headers || {}, {
-    'Content-Type': 'application/json',
-  });
-
-  logger.debug('Request: %o', {
-    ...localOptions,
-    headers: { ...localOptions.headers, Authorization: '<redacted>' },
-  });
-
-  let body: string;
-  if (jsonBody) {
-    body = JSON.stringify(jsonBody);
-    localOptions.headers['Content-Length'] = Buffer.byteLength(body);
-  }
-
-  return new Promise((resolve, reject) => {
-    const req = request(localOptions, (res) => {
-      const { statusCode, headers } = res;
-      const contentType = headers['content-type'];
-
-      let error;
-      if (statusCode === 404) {
-        error = new Http404Error(`Request Failed. Status Code: ${statusCode}`);
-      } else if (!statusCode || statusCode < 200 || statusCode >= 300) {
-        error = new HttpError(`Request Failed. Status Code: ${statusCode}`);
-      } else if (!contentType || !/^application\/json/.test(contentType)) {
-        error = new Error(
-          `Invalid content-type. Expected application/json but received ${contentType}`,
-        );
-      }
-      if (error) {
-        reject(error);
-        // consume response data to free up memory
-        res.resume();
-        return;
-      }
-
-      res.setEncoding('utf8');
-      let rawData = '';
-      res.on('data', (chunk) => {
-        rawData += chunk;
-      });
-      res.on('end', () => {
-        try {
-          const parsedData = JSON.parse(rawData);
-          resolve({ body: parsedData, headers });
-        } catch (e) {
-          reject(e);
-        }
-      });
-    }).on('error', (e) => {
-      /* istanbul ignore next */
-      reject(e);
-    });
-    if (body) {
-      req.write(body);
-    }
-    req.end();
-  });
-}
