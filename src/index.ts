@@ -21,9 +21,13 @@ import { Octokit } from '@octokit/rest';
 import type { RequestOptions } from 'https';
 import { ok } from 'assert';
 import { request } from 'https';
+import type { PinoLambdaLogger } from 'pino-lambda';
 import pino from 'pino-lambda';
 import { createAppAuth } from '@octokit/auth-app';
 import { SecretsManager } from 'aws-sdk';
+import type { Logger } from 'pino';
+import memoizeOne from 'memoize-one';
+import { Config } from './config';
 
 type Unarray<T> = T extends Array<infer U> ? U : T;
 
@@ -36,23 +40,6 @@ type PullRequestReviewCommentData = Endpoints['PATCH /repos/{owner}/{repo}/pulls
 type UserData = Endpoints['GET /users/{username}']['response']['data'];
 type Dict<T> = Record<string, T>;
 
-const logger = pino({
-  level: 'debug',
-  enabled: process.env.ENABLE_DEBUG !== 'false',
-});
-
-const log = logger.debug.bind(logger);
-const info = logger.info.bind(logger);
-const warn = logger.warn.bind(logger);
-const error = logger.error.bind(logger);
-
-log('Loading function');
-
-function assertNotEmpty<T>(thing: T | undefined, errorMessage?: string): T {
-  ok(thing, new Error(errorMessage));
-  return thing;
-}
-
 export type JSONResponse =
   | { error: string }
   | ({ success: boolean; triggered: boolean; commented?: boolean } & (
@@ -61,86 +48,44 @@ export type JSONResponse =
       | { message: string }
     ));
 
-type Config = {
-  /** needs: read_builds, write_builds, read_pipelines */
-  BUILDKITE_TOKEN: string;
-  BUILDKITE_ORG_NAME: string;
-  ENABLE_DEBUG?: string;
-} & (
-  | {
-      GITHUB_APP_APP_ID: string;
-      GITHUB_APP_PRIVATE_KEY: string;
-      GITHUB_APP_INSTALLATION_ID: string;
-    }
-  | { /** needs write access */ GITHUB_TOKEN: string }
-);
+const SECRETSMANAGER_CONFIG_KEY = 'SECRETSMANAGER_CONFIG_KEY';
 
-function parseConfig(value: string): Config {
-  const config = JSON.parse(value);
+const getLogger = (config: Config): PinoLambdaLogger =>
+  pino({
+    level: 'debug',
+    enabled: config.ENABLE_DEBUG !== 'false',
+  });
 
-  return (
-    config &&
-    typeof config === 'object' &&
-    'BUILDKITE_TOKEN' in config &&
-    'BUILDKITE_ORG_NAME' in config &&
-    ('GITHUB_TOKEN' in config ||
-      ('GITHUB_APP_APP_ID' in config &&
-        'GITHUB_APP_PRIVATE_KEY' in config &&
-        'GITHUB_APP_INSTALLATION_ID' in config))
-  );
-}
-
-let config: Config | undefined;
-async function getConfig(): Promise<Config> {
-  if (config) {
-    return config;
-  }
-  if (process.env.SECRETSMANAGER_CONFIG_KEY) {
+const getConfig = memoizeOne(async function (
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<Config> {
+  const secretsManagerKey = env[SECRETSMANAGER_CONFIG_KEY];
+  if (secretsManagerKey) {
     // if we have a secretsmanager config key, we use that to load the config
-    const SecretId = assertEnv('SECRETSMANAGER_CONFIG_KEY');
-
+    ok(secretsManagerKey);
     const client = new SecretsManager();
 
-    const value = await client.getSecretValue({ SecretId }).promise();
-    config = parseConfig(assertNotEmpty(value.SecretString));
+    const value = await client
+      .getSecretValue({ SecretId: secretsManagerKey })
+      .promise();
+    return Config.parse(JSON.parse(value.SecretString ?? ''));
   } else {
-    const base = {
-      BUILDKITE_TOKEN: assertEnv('BUILDKITE_TOKEN'),
-      BUILDKITE_ORG_NAME: assertEnv('BUILDKITE_ORG_NAME'),
-      ENABLE_DEBUG: process.env.ENABLE_DEBUG,
-    };
-
-    if (process.env.GITHUB_APP_APP_ID) {
-      config = {
-        ...base,
-        GITHUB_APP_APP_ID: assertEnv('GITHUB_APP_APP_ID'),
-        GITHUB_APP_PRIVATE_KEY: assertEnv('GITHUB_APP_PRIVATE_KEY'),
-        GITHUB_APP_INSTALLATION_ID: assertEnv('GITHUB_APP_INSTALLATION_ID'),
-      };
-    } else {
-      config = {
-        ...base,
-        GITHUB_TOKEN: assertEnv('GITHUB_TOKEN'),
-      };
-    }
+    return Config.parse(env);
   }
-  return config;
-}
+});
 
-async function getOctokit() {
-  const config = await getConfig();
-
+const getOctokit = memoizeOne(async function (config: Config, logger: Logger) {
   const octokitBaseConfig = {
     log: {
-      debug: log,
-      info,
-      warn,
-      error,
+      debug: (message: string) => logger.debug(message),
+      info: (message: string) => logger.info(message),
+      warn: (message: string) => logger.warn(message),
+      error: (message: string) => logger.error(message),
     },
   };
 
   if ('GITHUB_APP_APP_ID' in config) {
-    log('Using app credentials');
+    logger.debug('Using app credentials');
     return new Octokit({
       ...octokitBaseConfig,
       authStrategy: createAppAuth,
@@ -151,16 +96,13 @@ async function getOctokit() {
       },
     });
   } else {
-    log('Using user credentials');
+    logger.debug('Using user credentials');
     return new Octokit({
       ...octokitBaseConfig,
       auth: config.GITHUB_TOKEN,
     });
   }
-}
-
-const octokit = getOctokit();
-
+});
 class HttpError extends Error {
   constructor(message: string) {
     super(message);
@@ -182,6 +124,10 @@ export const handler: APIGatewayProxyHandler = async (
   context: Context /* For legacy testing only */,
   callback?: Callback /* For legacy testing only */,
 ): Promise<APIGatewayProxyResult> => {
+  const config = await getConfig();
+  const logger = getLogger(config);
+  const octokit = await getOctokit(config, logger);
+
   logger.withRequest(
     {
       ...event,
@@ -193,7 +139,7 @@ export const handler: APIGatewayProxyHandler = async (
     context,
   );
 
-  log('Received event: %o', event);
+  logger.debug('Received event: %o', event);
 
   const done = (err: Error | null, res?: JSONResponse) => {
     const ret: APIGatewayProxyResult = {
@@ -211,13 +157,12 @@ export const handler: APIGatewayProxyHandler = async (
     return done(new Error(`Unsupported method "${event.httpMethod}"`));
   }
 
-  const currentEventType = assertNotEmpty(
-    event.headers['X-GitHub-Event'],
-  ) as WebhookEventName;
+  ok(event.headers['X-GitHub-Event']);
+  const currentEventType = event.headers['X-GitHub-Event'] as WebhookEventName;
 
   function parseBody<T extends Schema>(event: APIGatewayProxyEvent) {
     ok(event.body);
-    log('event body: %o', event.body);
+    logger.debug('event body: %o', event.body);
     try {
       return (JSON.parse(event.body) as unknown) as T;
     } catch (e) {
@@ -231,13 +176,13 @@ export const handler: APIGatewayProxyHandler = async (
         event,
       );
       if (eventBody.action !== 'opened') {
-        info('PR was not opened, nothing to do here');
+        logger.info('PR was not opened, nothing to do here');
         return done(null, { success: true, triggered: false });
       }
       const repoSshUrl = eventBody.repository.ssh_url;
 
-      info('PR was opened');
-      return buildkiteReadPipelines()
+      logger.info('PR was opened');
+      return buildkiteReadPipelines(logger, config)
         .then((pipelineData) =>
           pipelineData
             // is enabled for branch builds
@@ -255,9 +200,11 @@ export const handler: APIGatewayProxyHandler = async (
           Promise.all([
             pipelines,
             fetchDocumentationLinkMds(
+              octokit,
+              logger,
               eventBody.repository,
               eventBody.pull_request,
-              BUILDKITE_ORG_NAME,
+              config.BUILDKITE_ORG_NAME,
               pipelines,
             ),
           ]),
@@ -282,7 +229,7 @@ export const handler: APIGatewayProxyHandler = async (
         .then(
           (pipelines) => {
             if (!pipelines.length) {
-              info(
+              logger.info(
                 'No matching/enabled pipelines for this repository, nothing to do here',
               );
               return done(null, {
@@ -301,6 +248,8 @@ export const handler: APIGatewayProxyHandler = async (
               )
               .join('\n');
             return githubAddComment(
+              octokit,
+              logger,
               eventBody.repository,
               eventBody.pull_request,
               `
@@ -320,7 +269,7 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
 </details>`,
             )
               .then((commentData) => {
-                info(
+                logger.info(
                   `Left a comment ${commentData.html_url} on how to start branch builds on ${eventBody.pull_request.html_url}`,
                 );
                 return commentData.html_url;
@@ -346,18 +295,20 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
       );
 
       if (eventBody.action === 'deleted') {
-        info('Comment was deleted, nothing to do here');
+        logger.info('Comment was deleted, nothing to do here');
         return done(null, { success: true, triggered: false });
       }
       if (
         isIssueComment(currentEventType, eventBody) &&
         !eventBody.issue.pull_request
       ) {
-        info('Request is not coming from a pull request, nothing to do here');
+        logger.info(
+          'Request is not coming from a pull request, nothing to do here',
+        );
         return done(null, { success: true, triggered: false });
       }
       if (!isTriggerComment(eventBody.comment.body)) {
-        info('Not a comment to trigger a build run, nothing to do here');
+        logger.info('Not a comment to trigger a build run, nothing to do here');
         return done(null, { success: true, triggered: false });
       }
 
@@ -368,7 +319,7 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
       const requestedBuildData = parseTriggerComment(eventBody.comment.body);
       const commentUrl = eventBody.comment.url;
       const commenter = eventBody.sender.login;
-      info(
+      logger.info(
         `@${commenter} requested "${requestedBuildData.buildNames.join(
           ',',
         )}" for ${prHtmlUrl || 'unkown URL'}`, // TODO: better fallback for unkown URLs
@@ -388,6 +339,7 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
       return Promise.all<PullRequestData | PullRequest, UserData>([
         isIssueComment(currentEventType, eventBody)
           ? githubGetPullRequestDetails(
+              octokit,
               eventBody.repository,
               eventBody.issue.number,
             )
@@ -400,6 +352,8 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
       ])
         .then(([prData, { name: senderName, email: senderEmail }]) => {
           return buildkiteStartBuild(
+            logger,
+            config,
             requestedBuildData,
             prData,
             commenter,
@@ -410,7 +364,7 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
             .then((bkDatas) =>
               bkDatas.map((bkData) => {
                 const buildKiteWebUrl = bkData.web_url;
-                info('Started Buildkite build %s', buildKiteWebUrl);
+                logger.info('Started Buildkite build %s', buildKiteWebUrl);
                 return {
                   url: buildKiteWebUrl,
                   number: bkData.number,
@@ -451,6 +405,7 @@ ${requestedBuildData.buildNames
   .map(perBuildResponse)
   .join('\n')}${envParagraph}${repeatParagraph}`;
               return githubUpdateComment(
+                octokit,
                 currentEventType,
                 eventBody.repository,
                 eventBody.comment.id,
@@ -458,7 +413,9 @@ ${requestedBuildData.buildNames
               );
             })
             .then((commentData) => {
-              info(`Updated comment ${commentData.html_url} with build URL`);
+              logger.info(
+                `Updated comment ${commentData.html_url} with build URL`,
+              );
               return commentData.html_url;
             });
         })
@@ -530,6 +487,7 @@ function urlPart(sshUri: string) {
  * Retrieves details about a pull request
  */
 async function githubGetPullRequestDetails(
+  octokit: Octokit,
   repository: Repository,
   pullNumber: number,
 ): Promise<PullRequestData> {
@@ -546,11 +504,17 @@ async function githubGetPullRequestDetails(
  * Adds a comment to a given comment thread on a pull request
  */
 async function githubAddComment(
+  octokit: Octokit,
+  logger: Logger,
   repository: Repository,
   pullRequest: PullRequest,
   body: string,
 ) {
-  log('adding comment to %s#%s', repository.full_name, pullRequest.number);
+  logger.debug(
+    'adding comment to %s#%s',
+    repository.full_name,
+    pullRequest.number,
+  );
   return (
     await octokit.issues.createComment({
       owner: repository.owner.login,
@@ -565,6 +529,7 @@ async function githubAddComment(
  * Updates a Github comment
  */
 async function githubUpdateComment(
+  octokit: Octokit,
   eventName: 'pull_request_review_comment' | 'issue_comment',
   repository: Repository,
   commentId: number,
@@ -614,12 +579,16 @@ function template(
  * @param pipelines An array of pipeline objects.
  */
 async function fetchDocumentationLinkMds(
+  octokit: Octokit,
+  logger: Logger,
   repository: Repository,
   prData: PullRequest,
   orgSlug: string,
   pipelines: Pipeline[],
 ): Promise<string[]> {
   const documentationUrls = await fetchDocumentationUrls(
+    octokit,
+    logger,
     repository,
     prData,
     orgSlug,
@@ -647,6 +616,8 @@ async function fetchDocumentationLinkMds(
  * @param pipelines An array of pipeline objects.
  */
 async function fetchDocumentationUrls(
+  octokit: Octokit,
+  logger: Logger,
   repository: Repository,
   prData: PullRequest,
   orgSlug: string,
@@ -682,13 +653,13 @@ async function fetchDocumentationUrls(
           contents = Array.isArray(response.data)
             ? response.data
             : [response.data];
-          log('contents of %s: %o', pathPrefix, contents);
+          logger.debug('contents of %s: %o', pathPrefix, contents);
         } catch (e) {
           if (!isOctokitRequestError(e) || e.status !== 404) {
             // something else than Octokit failed or it's not a 404
             throw e;
           }
-          log(
+          logger.debug(
             'no pipeline documentation files found for repository %s and Buildkite org %s',
             repository.full_name,
             orgSlug,
@@ -769,12 +740,14 @@ function zip<S, T>(xs: S[], ys: T[]): [S, T][] {
  *
  * @return A promise resolving to the decoded JSON data of the Buildkite API response
  */
-async function buildkiteReadPipelines() {
-  log('Reading pipelines');
+async function buildkiteReadPipelines(logger: Logger, config: Config) {
+  logger.debug('Reading pipelines');
   let pipelines: Pipeline[] = [];
 
   async function fetchNextPage(page: number) {
     const { body, headers } = await buildkiteApiRequest<Pipeline>(
+      logger,
+      config,
       `pipelines?page=${page}&per_page=100`,
     );
     pipelines = pipelines.concat(body);
@@ -817,6 +790,8 @@ type Pipeline = {
  * @return A promise resolving to the decoded JSON data of the Buildkite API response
  */
 async function buildkiteStartBuild(
+  logger: Logger,
+  config: Config,
   buildData: { buildNames: string[]; env: NodeJS.ProcessEnv },
   prData: PullRequestData | PullRequest,
   requester: string,
@@ -854,6 +829,9 @@ async function buildkiteStartBuild(
   return Promise.all(
     buildData.buildNames.map(async (buildName) => {
       const { body } = await buildkiteApiRequest<Build>(
+        logger,
+        config,
+
         `pipelines/${buildName}/builds`,
         { method: 'POST' },
         requestBody,
@@ -885,19 +863,21 @@ type Build = {
  *                   is a map
  */
 async function buildkiteApiRequest<T>(
+  logger: Logger,
+  config: Config,
   apiPathNoOrg: string,
   additionalOptions?: Partial<RequestOptions>,
   body?: Record<string, unknown>,
 ) {
   const options = {
     hostname: 'api.buildkite.com',
-    path: `/v2/organizations/${BUILDKITE_ORG_NAME}/${apiPathNoOrg}`,
+    path: `/v2/organizations/${config.BUILDKITE_ORG_NAME}/${apiPathNoOrg}`,
     headers: {
-      Authorization: `Bearer ${BUILDKITE_TOKEN}`,
+      Authorization: `Bearer ${config.BUILDKITE_TOKEN}`,
     },
     ...(additionalOptions || {}),
   };
-  return jsonRequest<T>(options, body);
+  return jsonRequest<T>(logger, options, body);
 }
 
 /* General helper functions */
@@ -910,6 +890,7 @@ async function buildkiteApiRequest<T>(
  *                   is a map
  */
 async function jsonRequest<T = Record<string, unknown>>(
+  logger: Logger,
   options: Partial<RequestOptions>,
   jsonBody?: Record<string, unknown>,
 ): Promise<{ body: T; headers: IncomingHttpHeaders }> {
@@ -919,7 +900,7 @@ async function jsonRequest<T = Record<string, unknown>>(
     'Content-Type': 'application/json',
   });
 
-  log('Request: %o', {
+  logger.debug('Request: %o', {
     ...localOptions,
     headers: { ...localOptions.headers, Authorization: '<redacted>' },
   });
@@ -974,19 +955,6 @@ async function jsonRequest<T = Record<string, unknown>>(
     }
     req.end();
   });
-}
-
-/**
- * Asserts that a given environment variable is set and returns it
- *
- * @return The value of the given environment variable
- * @throws {Error} if the environment variable is not set
- */
-function assertEnv(name: string /* The name of the environment variable */) {
-  return assertNotEmpty(
-    process.env[name],
-    `Required: "${name}" environment variable`,
-  );
 }
 
 /**

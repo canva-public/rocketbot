@@ -6,6 +6,7 @@ Globals:
     Timeout: 90
     Environment:
       Variables:
+        SECRETSMANAGER_CONFIG_KEY: ~
         GITHUB_TOKEN: ~
         GITHUB_APP_PRIVATE_KEY: ~
         GITHUB_APP_INSTALLATION_ID: ~
