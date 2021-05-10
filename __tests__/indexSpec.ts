@@ -5,8 +5,8 @@ process.env.ENABLE_DEBUG = process.env.ENABLE_DEBUG || 'false';
 
 import type { APIGatewayProxyResult, Context } from 'aws-lambda';
 import { isTriggerComment, parseTriggerComment } from '../src/trigger';
-import type { JSONResponse } from '../src';
-import { handler } from '../src';
+import type { JSONResponse } from '../src/response';
+import { handler } from '../src/index';
 import { join } from 'path';
 import { ok } from 'assert';
 import nock from 'nock';
