@@ -10,6 +10,7 @@
     "test:watch": "jest --watch --notify",
     "build": "rimraf ./dist && rollup -c",
     "prepare": "husky install",
+    "pretest-dist": "yarn build",
     "test-dist": "sam local invoke 'RocketBot' -e event.json --env-vars env.json"
   },
   "repository": {
@@ -66,8 +67,10 @@
     "@octokit/auth-app": "^3.4.0",
     "@octokit/rest": "^18.5.3",
     "aws-lambda": "^1.0.6",
+    "memoize-one": "^5.2.1",
     "pino": "^6.11.3",
     "pino-lambda": "^2.0.0",
-    "pino-pretty": "^4.7.1"
+    "pino-pretty": "^4.7.1",
+    "zod": "^3.0.0-beta.1"
   }
 }
