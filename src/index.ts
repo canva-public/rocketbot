@@ -1,8 +1,6 @@
 import type {
   APIGatewayProxyEvent,
-  APIGatewayProxyHandler,
   APIGatewayProxyResult,
-  Callback,
   Context,
 } from 'aws-lambda';
 import type {
@@ -39,16 +37,9 @@ function response(
   };
 }
 
-const done = (err: Error | null, res?: JSONResponse, callback?: Callback) => {
-  const ret = response(err, res);
-  callback?.(null, ret);
-  return Promise.resolve(ret);
-};
-
-export const handler: APIGatewayProxyHandler = async (
+export const handler = async (
   event: APIGatewayProxyEvent,
-  context: Context /* For legacy testing only */,
-  callback?: Callback /* For legacy testing only */,
+  context: Context,
 ): Promise<APIGatewayProxyResult> => {
   const config = await getConfig(process.env);
   const logger = getLogger(config);

@@ -4,7 +4,4 @@ module.exports = {
   env: {
     'jest/globals': true,
   },
-  rules: {
-    'jest/no-hooks': 'off',
-  },
 };

@@ -18,6 +18,8 @@ import type { JSONResponse } from '../response';
 export type PullRequestData = RestEndpointMethodTypes['pulls']['get']['response']['data'];
 export type UserData = RestEndpointMethodTypes['users']['getByUsername']['response']['data'];
 
+const envVarPrefix = 'GH_CONTROL_USER_ENV_';
+
 export async function commented(
   eventBody: IssueCommentEvent | PullRequestReviewCommentEvent,
   currentEventType: 'issue_comment' | 'pull_request_review_comment',
@@ -61,7 +63,7 @@ export async function commented(
   const hasCustomEnv = customEnvKeys.length > 0;
   requestedBuildData.env = customEnvKeys.reduce<NodeJS.ProcessEnv>(
     (ret, key) => {
-      ret[`GH_CONTROL_USER_ENV_${key}`] = requestedBuildData.env[key];
+      ret[`${envVarPrefix}${key}`] = requestedBuildData.env[key];
       return ret;
     },
     {},
