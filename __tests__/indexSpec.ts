@@ -5,10 +5,9 @@ process.env.ENABLE_DEBUG = process.env.ENABLE_DEBUG || 'false';
 
 import type { APIGatewayProxyResult, Context } from 'aws-lambda';
 import { isTriggerComment, parseTriggerComment } from '../src/trigger';
-import type { JSONResponse } from '../src';
-import { handler } from '../src';
+import type { JSONResponse } from '../src/response';
+import { handler } from '../src/index';
 import { join } from 'path';
-import { ok } from 'assert';
 import nock from 'nock';
 
 // Enable this to record HTTP requests when adding a new test
@@ -20,13 +19,19 @@ function loadFixture(fixturePath: string) {
 }
 
 function assertLambdaResponse(
-  response: APIGatewayProxyResult | undefined,
+  response: APIGatewayProxyResult,
   expectedStatus: APIGatewayProxyResult['statusCode'],
   expectedBody: JSONResponse,
 ) {
-  ok(response);
-  expect(response.statusCode).toStrictEqual(expectedStatus);
-  expect(JSON.parse(response.body)).toStrictEqual(expectedBody);
+  expect({ ...response, body: JSON.parse(response.body) }).toStrictEqual(
+    expect.objectContaining({
+      statusCode: expectedStatus,
+      body: expectedBody,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    }),
+  );
 }
 
 function assertNockDone() {
@@ -38,10 +43,7 @@ function assertNockDone() {
 }
 
 describe('github-control', () => {
-  let context: Context;
-  beforeEach(() => {
-    context = (jest.fn<Context, never>() as unknown) as Context;
-  });
+  const context = (jest.fn<Context, never>() as unknown) as Context;
   describe('general', () => {
     describe('comment matching', () => {
       it('should match a simple comment', () => {
@@ -293,9 +295,11 @@ describe('github-control', () => {
   });
 
   describe('with mocked requests', () => {
+    // eslint-disable-next-line jest/no-hooks
     beforeEach(() => {
       nock.disableNetConnect();
     });
+    // eslint-disable-next-line jest/no-hooks
     afterEach(() => {
       nock.enableNetConnect();
       nock.cleanAll();
@@ -304,46 +308,33 @@ describe('github-control', () => {
     it('should ignore anything that is not a POST', async () => {
       expect.hasAssertions();
       const lambdaRequest = loadFixture('lambda_request_GET');
-      await handler(lambdaRequest, context, (err, res) => {
-        if (err) {
-          throw err;
-        }
-        assertLambdaResponse(res, 400, {
-          error: 'Unsupported method "GET"',
-        });
+      const res = await handler(lambdaRequest, context);
+      assertLambdaResponse(res, 400, {
+        error: 'Unsupported method "GET"',
       });
     });
 
     it('should ignore unsupported github events', async () => {
       expect.hasAssertions();
       const lambdaRequest = loadFixture('commit_comment/lambda_request');
-      await handler(lambdaRequest, context, (err, res) => {
-        if (err) {
-          throw err;
-        }
-        assertLambdaResponse(res, 400, {
-          error: 'Unsupported event type "commit_comment"',
-        });
+      const res = await handler(lambdaRequest, context);
+      assertLambdaResponse(res, 400, {
+        error: 'Unsupported event type "commit_comment"',
       });
     });
 
     it('should gracefully handle non-JSON requests', async () => {
       expect.hasAssertions();
       const lambdaRequest = loadFixture('lambda_request_no_JSON');
-
-      // The error messages differ in different node versions (e.g. 4.3.2 vs. 7.5.0)
-      let errorMessage;
       try {
         JSON.parse(lambdaRequest.body);
       } catch (e) {
-        errorMessage = e.message;
+        // The error messages differ in different node versions (e.g. 4.3.2 vs. 7.5.0)
+        const res = await handler(lambdaRequest, context);
+        assertLambdaResponse(res, 400, {
+          error: `Could not parse event body: ${e.message}`,
+        });
       }
-
-      await expect(
-        handler(lambdaRequest, context, jest.fn()),
-      ).rejects.toStrictEqual(
-        new Error(`Could not parse event body: ${errorMessage}`),
-      );
     });
 
     it('should gracefully handle a failing buildkite request', async () => {
@@ -354,15 +345,11 @@ describe('github-control', () => {
         .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
         .reply(401, { message: 'Authorization failed' });
 
-      await handler(lambdaRequest, context, (err, res) => {
-        if (err) {
-          throw err;
-        }
-        assertNockDone();
-        assertLambdaResponse(res, 400, {
-          error: 'Request Failed. Status Code: 401',
-        });
+      const res = await handler(lambdaRequest, context);
+      assertLambdaResponse(res, 400, {
+        error: 'Request Failed. Status Code: 401',
       });
+      assertNockDone();
     });
 
     it('should gracefully handle a failing github request', async () => {
@@ -385,15 +372,11 @@ describe('github-control', () => {
           documentation_url: 'https://developer.github.com/v3',
         });
 
-      await handler(lambdaRequest, context, (err, res) => {
-        if (err) {
-          throw err;
-        }
-        assertNockDone();
-        assertLambdaResponse(res, 401, {
-          error: 'Bad credentials',
-        });
+      const res = await handler(lambdaRequest, context);
+      assertLambdaResponse(res, 401, {
+        error: 'Bad credentials',
       });
+      assertNockDone();
     });
 
     it('should gracefully handle non-JSON responses', async () => {
@@ -406,16 +389,12 @@ describe('github-control', () => {
           'Content-Type': 'text/plain',
         });
 
-      await handler(lambdaRequest, context, (err, res) => {
-        if (err) {
-          throw err;
-        }
-        assertNockDone();
-        assertLambdaResponse(res, 400, {
-          error:
-            'Invalid content-type. Expected application/json but received text/plain',
-        });
+      const res = await handler(lambdaRequest, context);
+      assertLambdaResponse(res, 400, {
+        error:
+          'Invalid content-type. Expected application/json but received text/plain',
       });
+      assertNockDone();
     });
 
     it('should gracefully handle broken JSON responses', async () => {
@@ -425,44 +404,43 @@ describe('github-control', () => {
       );
 
       const body = 'This is no JSON';
-
       nock('https://api.github.com').get('/users/some-user').reply(200, body, {
         'Content-Type': 'application/json',
       });
 
-      await expect(handler(lambdaRequest, context, jest.fn())).rejects.toThrow(
-        /invalid json response body at https:\/\/api.github.com\/users\/some-user/,
-      );
+      try {
+        JSON.parse(body);
+      } catch (e) {
+        const res = await handler(lambdaRequest, context);
+        assertLambdaResponse(res, 400, {
+          error: `invalid json response body at https://api.github.com/users/some-user reason: ${e.message}`,
+        });
+        assertNockDone();
+      }
     });
 
     describe('ping', () => {
       it('should properly handle a ping', async () => {
         expect.hasAssertions();
         const lambdaRequest = loadFixture('ping/lambda_request');
-        await handler(lambdaRequest, context, (err, res) => {
-          if (err) {
-            throw err;
-          }
-          assertLambdaResponse(res, 200, {
-            commented: false,
-            success: true,
-            triggered: false,
-            message: 'Hooks working for some-org/test-repo',
-          });
+        const res = await handler(lambdaRequest, context);
+        assertLambdaResponse(res, 200, {
+          commented: false,
+          success: true,
+          triggered: false,
+          message: 'Hooks working for some-org/test-repo',
         });
+        assertNockDone();
       });
 
       it('should complain if the events set up are not enough', async () => {
         expect.hasAssertions();
         const lambdaRequest = loadFixture('ping/lambda_request_no_events');
-        await handler(lambdaRequest, context, (err, res) => {
-          if (err) {
-            throw err;
-          }
-          assertLambdaResponse(res, 400, {
-            error: 'Configure at least the delivery of issue comments',
-          });
+        const res = await handler(lambdaRequest, context);
+        assertLambdaResponse(res, 400, {
+          error: 'Configure at least the delivery of issue comments',
         });
+        assertNockDone();
       });
     });
 
@@ -470,15 +448,12 @@ describe('github-control', () => {
       it('should ignore when pull requests change state except when they are opened', async () => {
         expect.hasAssertions();
         const lambdaRequest = loadFixture('pull_request/lambda_pr_assigned');
-        await handler(lambdaRequest, context, (err, res) => {
-          if (err) {
-            throw err;
-          }
-          assertLambdaResponse(res, 200, {
-            success: true,
-            triggered: false,
-          });
+        const res = await handler(lambdaRequest, context);
+        assertLambdaResponse(res, 200, {
+          success: true,
+          triggered: false,
         });
+        assertNockDone();
       });
 
       it('should not post a comment to github about the usage when no pipelines match', async () => {
@@ -492,17 +467,13 @@ describe('github-control', () => {
           .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
           .reply(200, pipelinesReply);
 
-        await handler(lambdaRequest, context, (err, res) => {
-          if (err) {
-            throw err;
-          }
-          assertNockDone();
-          assertLambdaResponse(res, 200, {
-            success: true,
-            triggered: false,
-            commented: false,
-          });
+        const res = await handler(lambdaRequest, context);
+        assertLambdaResponse(res, 200, {
+          success: true,
+          triggered: false,
+          commented: false,
         });
+        assertNockDone();
       });
 
       it('should post a comment to github about the usage when a pull request is opened', async () => {
@@ -538,19 +509,15 @@ describe('github-control', () => {
           )
           .reply(200, docSomePipelineLite);
 
-        await handler(lambdaRequest, context, (err, res) => {
-          if (err) {
-            throw err;
-          }
-          assertNockDone();
-          assertLambdaResponse(res, 200, {
-            success: true,
-            triggered: false,
-            commented: true,
-            commentUrl:
-              'https://github.com/some-org/some-repo/pull/1111111#issuecomment-280987786',
-          });
+        const res = await handler(lambdaRequest, context);
+        assertLambdaResponse(res, 200, {
+          success: true,
+          triggered: false,
+          commented: true,
+          commentUrl:
+            'https://github.com/some-org/some-repo/pull/1111111#issuecomment-280987786',
         });
+        assertNockDone();
       });
 
       it('should page when there are more pages', async () => {
@@ -572,12 +539,8 @@ describe('github-control', () => {
           .get('/v2/organizations/some-org/pipelines?page=2&per_page=100')
           .reply(200, pipelinesReplyPage2);
 
-        await handler(lambdaRequest, context, (err) => {
-          if (err) {
-            throw err;
-          }
-          assertNockDone();
-        });
+        await handler(lambdaRequest, context);
+        assertNockDone();
       });
     });
 
@@ -624,19 +587,15 @@ describe('github-control', () => {
           )
           .reply(200, updateCommentReply);
 
-        await handler(lambdaRequest, context, (err, res) => {
-          if (err) {
-            throw err;
-          }
-          assertNockDone();
-          assertLambdaResponse(res, 200, {
-            success: true,
-            triggered: true,
-            commented: false,
-            updatedCommentUrl:
-              'https://github.com/some-org/some-repo/pull/9500#issuecomment-279928810',
-          });
+        const res = await handler(lambdaRequest, context);
+        assertLambdaResponse(res, 200, {
+          success: true,
+          triggered: true,
+          commented: false,
+          updatedCommentUrl:
+            'https://github.com/some-org/some-repo/pull/9500#issuecomment-279928810',
         });
+        assertNockDone();
       });
 
       it('should start multiple builds when an issue comment requests it', async () => {
@@ -693,19 +652,15 @@ describe('github-control', () => {
           )
           .reply(200, updateCommentReply);
 
-        await handler(lambdaRequestMultiBuild, context, (err, res) => {
-          if (err) {
-            throw err;
-          }
-          assertNockDone();
-          assertLambdaResponse(res, 200, {
-            success: true,
-            triggered: true,
-            commented: false,
-            updatedCommentUrl:
-              'https://github.com/some-org/some-repo/pull/9500#issuecomment-279928810',
-          });
+        const res = await handler(lambdaRequestMultiBuild, context);
+        assertLambdaResponse(res, 200, {
+          success: true,
+          triggered: true,
+          commented: false,
+          updatedCommentUrl:
+            'https://github.com/some-org/some-repo/pull/9500#issuecomment-279928810',
         });
+        assertNockDone();
       });
 
       it('should start a build with environment variables when an issue comment requests it', async () => {
@@ -752,19 +707,15 @@ describe('github-control', () => {
           )
           .reply(200, updateCommentReply);
 
-        await handler(lambdaRequest, context, (err, res) => {
-          if (err) {
-            throw err;
-          }
-          assertNockDone();
-          assertLambdaResponse(res, 200, {
-            success: true,
-            triggered: true,
-            commented: false,
-            updatedCommentUrl:
-              'https://github.com/some-org/some-repo/pull/9500#issuecomment-279928810',
-          });
+        const res = await handler(lambdaRequest, context);
+        assertLambdaResponse(res, 200, {
+          success: true,
+          triggered: true,
+          commented: false,
+          updatedCommentUrl:
+            'https://github.com/some-org/some-repo/pull/9500#issuecomment-279928810',
         });
+        assertNockDone();
       });
 
       it('should ignore deleted comments', async () => {
@@ -773,32 +724,24 @@ describe('github-control', () => {
           'issue_comment/lambda_request_comment_deleted',
         );
 
-        await handler(lambdaRequest, context, (err, res) => {
-          if (err) {
-            throw err;
-          }
-          assertNockDone();
-          assertLambdaResponse(res, 200, {
-            success: true,
-            triggered: false,
-          });
+        const res = await handler(lambdaRequest, context);
+        assertLambdaResponse(res, 200, {
+          success: true,
+          triggered: false,
         });
+        assertNockDone();
       });
 
       it('should ignore comments not attached to pull requests', async () => {
         expect.hasAssertions();
         const lambdaRequest = loadFixture('issue_comment/lambda_request_no_pr');
 
-        await handler(lambdaRequest, context, (err, res) => {
-          if (err) {
-            throw err;
-          }
-          assertNockDone();
-          assertLambdaResponse(res, 200, {
-            success: true,
-            triggered: false,
-          });
+        const res = await handler(lambdaRequest, context);
+        assertLambdaResponse(res, 200, {
+          success: true,
+          triggered: false,
         });
+        assertNockDone();
       });
     });
 
@@ -840,19 +783,15 @@ describe('github-control', () => {
           )
           .reply(200, updateCommentReply);
 
-        await handler(lambdaRequest, context, (err, res) => {
-          if (err) {
-            throw err;
-          }
-          assertNockDone();
-          assertLambdaResponse(res, 200, {
-            success: true,
-            triggered: true,
-            commented: false,
-            updatedCommentUrl:
-              'https://github.com/some-org/some-repo/pull/1111111#discussion_r101434594',
-          });
+        const res = await handler(lambdaRequest, context);
+        assertLambdaResponse(res, 200, {
+          success: true,
+          triggered: true,
+          commented: false,
+          updatedCommentUrl:
+            'https://github.com/some-org/some-repo/pull/1111111#discussion_r101434594',
         });
+        assertNockDone();
       });
 
       it('should ignore comments that do not contain a build marker', async () => {
@@ -861,15 +800,12 @@ describe('github-control', () => {
           'pull_request_review_comment/lambda_request_random_comment',
         );
 
-        await handler(lambdaRequest, context, (err, res) => {
-          if (err) {
-            throw err;
-          }
-          assertLambdaResponse(res, 200, {
-            success: true,
-            triggered: false,
-          });
+        const res = await handler(lambdaRequest, context);
+        assertLambdaResponse(res, 200, {
+          success: true,
+          triggered: false,
         });
+        assertNockDone();
       });
     });
   });
