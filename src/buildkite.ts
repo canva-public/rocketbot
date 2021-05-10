@@ -3,7 +3,7 @@ import type { Config } from './config';
 import type { RestEndpointMethodTypes } from '@octokit/rest';
 import type { PullRequest } from '@octokit/webhooks-types';
 import got from 'got';
-import type { OptionsOfJSONResponseBody } from 'got';
+import memoizeOne from 'memoize-one';
 
 type Dict<T> = Record<string, T>;
 type PullRequestData = RestEndpointMethodTypes['pulls']['get']['response']['data'];
@@ -16,25 +16,39 @@ export async function buildkiteReadPipelines(
   config: Config,
 ): Promise<Pipeline[]> {
   logger.debug('Reading pipelines');
-  let pipelines: Pipeline[] = [];
 
-  async function fetchNextPage(page: number) {
-    const { body, headers } = await buildkiteApiRequest<Pipeline[]>(
-      logger,
-      config,
-      `pipelines?page=${page}&per_page=100`,
-    );
-    pipelines = pipelines.concat(body);
-    return headers.link && headers.link.indexOf('rel="next"') !== -1;
-  }
-
-  let currentPage = 1;
-
-  // eslint-disable-next-line no-await-in-loop
-  while (await fetchNextPage(currentPage)) {
-    currentPage += 1;
-  }
-  return pipelines;
+  return got.paginate.all<Pipeline>(
+    new URL(
+      `/v2/organizations/${config.BUILDKITE_ORG_NAME}/pipelines`,
+      'https://api.buildkite.com',
+    ),
+    {
+      headers: {
+        Authorization: `Bearer ${config.BUILDKITE_TOKEN}`,
+      },
+      responseType: 'json',
+      searchParams: {
+        page: 1,
+        per_page: 100,
+      },
+      pagination: {
+        paginate: (response) => {
+          const { headers } = response;
+          if (!headers.link || headers.link.indexOf('rel="next"') === -1) {
+            return false;
+          }
+          const previousSearchParams = response.request.options.searchParams;
+          const previousPage = previousSearchParams?.get('page');
+          return {
+            searchParams: {
+              ...previousSearchParams,
+              page: Number(previousPage) + 1,
+            },
+          };
+        },
+      },
+    },
+  );
 }
 
 /**
@@ -93,12 +107,18 @@ export async function buildkiteStartBuild(
   };
   return Promise.all(
     buildData.buildNames.map(async (buildName) => {
-      const { body } = await buildkiteApiRequest<Build>(
-        logger,
-        config,
-        `pipelines/${buildName}/builds`,
-        requestBody,
-        { method: 'POST' },
+      const { body } = await got.post<Build>(
+        new URL(
+          `/v2/organizations/${config.BUILDKITE_ORG_NAME}/pipelines/${buildName}/builds`,
+          'https://api.buildkite.com',
+        ),
+        {
+          json: requestBody,
+          headers: {
+            Authorization: `Bearer ${config.BUILDKITE_TOKEN}`,
+          },
+          responseType: 'json',
+        },
       );
       return body;
     }),
@@ -113,29 +133,3 @@ export type Build = {
   number: number;
   scheduled_at: string;
 };
-
-/**
- * Makes an HTTP request against the Buildkite API v2.
- */
-async function buildkiteApiRequest<T>(
-  logger: Logger,
-  config: Config,
-  apiPathNoOrg: string /** The path of the endpoint behind the organizational part without preceding slash */,
-  jsonBody?: Record<string, unknown>,
-  additionalOptions: Partial<OptionsOfJSONResponseBody> = {},
-) {
-  return got<T>(
-    new URL(
-      `/v2/organizations/${config.BUILDKITE_ORG_NAME}/${apiPathNoOrg}`,
-      'https://api.buildkite.com',
-    ),
-    {
-      ...additionalOptions,
-      json: jsonBody,
-      headers: {
-        Authorization: `Bearer ${config.BUILDKITE_TOKEN}`,
-      },
-      responseType: 'json',
-    },
-  );
-}
