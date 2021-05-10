@@ -314,13 +314,9 @@ describe('github-control', () => {
     it('should ignore anything that is not a POST', async () => {
       expect.hasAssertions();
       const lambdaRequest = loadFixture('lambda_request_GET');
-      await handler(lambdaRequest, context, (err, res) => {
-        if (err) {
-          throw err;
-        }
-        assertLambdaResponse(res, 400, {
-          error: 'Unsupported method "GET"',
-        });
+      const res = await handler(lambdaRequest, context, jest.fn());
+      assertLambdaResponse(res, 400, {
+        error: 'Unsupported method "GET"',
       });
     });
 
@@ -340,20 +336,15 @@ describe('github-control', () => {
     it('should gracefully handle non-JSON requests', async () => {
       expect.hasAssertions();
       const lambdaRequest = loadFixture('lambda_request_no_JSON');
-
-      // The error messages differ in different node versions (e.g. 4.3.2 vs. 7.5.0)
-      let errorMessage;
       try {
         JSON.parse(lambdaRequest.body);
       } catch (e) {
-        errorMessage = e.message;
+        // The error messages differ in different node versions (e.g. 4.3.2 vs. 7.5.0)
+        const res = await handler(lambdaRequest, context, jest.fn());
+        assertLambdaResponse(res, 400, {
+          error: `Could not parse event body: ${e.message}`,
+        });
       }
-
-      await expect(
-        handler(lambdaRequest, context, jest.fn()),
-      ).rejects.toStrictEqual(
-        new Error(`Could not parse event body: ${errorMessage}`),
-      );
     });
 
     it('should gracefully handle a failing buildkite request', async () => {

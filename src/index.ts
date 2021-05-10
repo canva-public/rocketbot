@@ -26,14 +26,21 @@ const getLogger = (config: Config): PinoLambdaLogger =>
     enabled: config.ENABLE_DEBUG !== 'false',
   });
 
-const done = (err: Error | null, res?: JSONResponse, callback?: Callback) => {
-  const ret: APIGatewayProxyResult = {
+function response(
+  err: Error | null,
+  res?: JSONResponse,
+): APIGatewayProxyResult {
+  return {
     statusCode: err ? (isOctokitRequestError(err) ? err.status : 400) : 200,
     body: err ? JSON.stringify({ error: err.message }) : JSON.stringify(res),
     headers: {
       'Content-Type': 'application/json',
     },
   };
+}
+
+const done = (err: Error | null, res?: JSONResponse, callback?: Callback) => {
+  const ret = response(err, res);
   callback?.(null, ret);
   return Promise.resolve(ret);
 };
@@ -61,11 +68,7 @@ export const handler: APIGatewayProxyHandler = async (
   logger.debug('Received event: %o', event);
 
   if (event.httpMethod !== 'POST') {
-    return done(
-      new Error(`Unsupported method "${event.httpMethod}"`),
-      undefined,
-      callback,
-    );
+    return response(new Error(`Unsupported method "${event.httpMethod}"`));
   }
 
   ok(event.headers['X-GitHub-Event']);
@@ -81,51 +84,37 @@ export const handler: APIGatewayProxyHandler = async (
     }
   }
 
-  switch (currentEventType) {
-    case 'pull_request': {
-      const eventBody = parseBody<WebhookEventMap[typeof currentEventType]>(
-        event,
-      );
-      try {
-        return done(
+  try {
+    switch (currentEventType) {
+      case 'pull_request': {
+        const eventBody = parseBody<WebhookEventMap[typeof currentEventType]>(
+          event,
+        );
+        return response(
           null,
           await prOpened(eventBody, logger, config, octokit),
-          callback,
         );
-      } catch (e) {
-        return done(e, undefined, callback);
       }
-    }
-    case 'issue_comment':
-    case 'pull_request_review_comment': {
-      const eventBody = parseBody<WebhookEventMap[typeof currentEventType]>(
-        event,
-      );
-      try {
-        return done(
+      case 'issue_comment':
+      case 'pull_request_review_comment': {
+        const eventBody = parseBody<WebhookEventMap[typeof currentEventType]>(
+          event,
+        );
+        return response(
           null,
           await commented(eventBody, currentEventType, logger, config, octokit),
-          callback,
         );
-      } catch (e) {
-        return done(e, undefined, callback);
       }
-    }
-    case 'ping': {
-      const eventBody = parseBody<WebhookEventMap[typeof currentEventType]>(
-        event,
-      );
-      try {
-        return done(null, ping(eventBody), callback);
-      } catch (e) {
-        return done(e, undefined, callback);
+      case 'ping': {
+        const eventBody = parseBody<WebhookEventMap[typeof currentEventType]>(
+          event,
+        );
+        return response(null, ping(eventBody));
       }
+      default:
+        throw new Error(`Unsupported event type "${currentEventType}"`);
     }
-    default:
-      return done(
-        new Error(`Unsupported event type "${currentEventType}"`),
-        undefined,
-        callback,
-      );
+  } catch (e) {
+    return response(e);
   }
 };
