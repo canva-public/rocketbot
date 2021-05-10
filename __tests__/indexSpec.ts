@@ -531,13 +531,14 @@ describe('github-control', () => {
         nock('https://api.buildkite.com')
           .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
           .reply(200, pipelinesReply, {
-            Link:
+            link:
               '<https://api.buildkite.com/v2/organizations/some-org/pipelines?page=2&per_page=100>; rel="next", <https://api.buildkite.com/v2/organizations/some-org/pipelines?page=2&per_page=100>; rel="last"',
-          });
-
-        nock('https://api.buildkite.com')
+          })
           .get('/v2/organizations/some-org/pipelines?page=2&per_page=100')
-          .reply(200, pipelinesReplyPage2);
+          .reply(200, pipelinesReplyPage2, {
+            link:
+              '<https://api.buildkite.com/v2/organizations/some-org/pipelines?page=1&per_page=100>; rel="prev", <https://api.buildkite.com/v2/organizations/some-org/pipelines?page=1&per_page=100>; rel="first"',
+          });
 
         await handler(lambdaRequest, context);
         assertNockDone();

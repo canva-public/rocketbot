@@ -31,28 +31,7 @@ export async function buildkiteReadPipelines(
     paginate: { all },
   } = gotInstance(config);
 
-  return all<Pipeline>('pipelines', {
-    searchParams: {
-      page: 1,
-      per_page: 100,
-    },
-    pagination: {
-      paginate: (response) => {
-        const { headers } = response;
-        if (!headers.link || headers.link.indexOf('rel="next"') === -1) {
-          return false;
-        }
-        const previousSearchParams = response.request.options.searchParams;
-        const previousPage = previousSearchParams?.get('page');
-        return {
-          searchParams: {
-            ...previousSearchParams,
-            page: Number(previousPage) + 1,
-          },
-        };
-      },
-    },
-  });
+  return all<Pipeline>('pipelines?page=1&per_page=100');
 }
 
 /**
