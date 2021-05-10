@@ -6,9 +6,11 @@ import type {
   Context,
 } from 'aws-lambda';
 import type {
+  IssueCommentEvent,
   PingEvent,
   PullRequest,
   PullRequestEvent,
+  PullRequestReviewCommentEvent,
   Schema,
   WebhookEventMap,
   WebhookEventName,
@@ -124,146 +126,15 @@ export const handler: APIGatewayProxyHandler = async (
       const eventBody = parseBody<WebhookEventMap[typeof currentEventType]>(
         event,
       );
-
-      if (eventBody.action === 'deleted') {
-        logger.info('Comment was deleted, nothing to do here');
-        return done(null, { success: true, triggered: false }, callback);
-      }
-      if (
-        isIssueComment(currentEventType, eventBody) &&
-        !eventBody.issue.pull_request
-      ) {
-        logger.info(
-          'Request is not coming from a pull request, nothing to do here',
+      try {
+        return done(
+          null,
+          await commented(eventBody, currentEventType, logger, config, octokit),
+          callback,
         );
-        return done(null, { success: true, triggered: false }, callback);
+      } catch (e) {
+        return done(e, undefined, callback);
       }
-      if (!isTriggerComment(eventBody.comment.body)) {
-        logger.info('Not a comment to trigger a build run, nothing to do here');
-        return done(null, { success: true, triggered: false }, callback);
-      }
-
-      const prHtmlUrl = isIssueComment(currentEventType, eventBody)
-        ? eventBody.issue.pull_request?.html_url
-        : eventBody.pull_request.html_url;
-
-      const requestedBuildData = parseTriggerComment(eventBody.comment.body);
-      const commentUrl = eventBody.comment.url;
-      const commenter = eventBody.sender.login;
-      logger.info(
-        `@${commenter} requested "${requestedBuildData.buildNames.join(
-          ',',
-        )}" for ${prHtmlUrl || 'unkown URL'}`, // TODO: better fallback for unkown URLs
-      );
-
-      const customEnv = requestedBuildData.env;
-      const customEnvKeys = Object.keys(requestedBuildData.env);
-      const hasCustomEnv = customEnvKeys.length > 0;
-      requestedBuildData.env = customEnvKeys.reduce<NodeJS.ProcessEnv>(
-        (ret, key) => {
-          ret[`GH_CONTROL_USER_ENV_${key}`] = requestedBuildData.env[key];
-          return ret;
-        },
-        {},
-      );
-
-      return Promise.all<PullRequestData | PullRequest, UserData>([
-        isIssueComment(currentEventType, eventBody)
-          ? githubGetPullRequestDetails(
-              octokit,
-              eventBody.repository,
-              eventBody.issue.number,
-            )
-          : Promise.resolve(eventBody.pull_request as PullRequest),
-        (
-          await octokit.users.getByUsername({
-            username: eventBody.sender.login,
-          })
-        ).data,
-      ])
-        .then(([prData, { name: senderName, email: senderEmail }]) => {
-          return buildkiteStartBuild(
-            logger,
-            config,
-            requestedBuildData,
-            prData,
-            commenter,
-            commentUrl,
-            senderName,
-            senderEmail ?? undefined,
-          )
-            .then((bkDatas) =>
-              bkDatas.map((bkData) => {
-                const buildKiteWebUrl = bkData.web_url;
-                logger.info('Started Buildkite build %s', buildKiteWebUrl);
-                return {
-                  url: buildKiteWebUrl,
-                  number: bkData.number,
-                  scheduled: bkData.scheduled_at,
-                };
-              }),
-            )
-            .then((data) => {
-              const envParagraph = hasCustomEnv
-                ? `\n\nwith user-defined environment variables:\n\`\`\`ini\n${Object.keys(
-                    requestedBuildData.env,
-                  )
-                    .map((k) => `${k}=${requestedBuildData.env[k]}`)
-                    .join('\n')}\n\`\`\``
-                : '';
-              const repeatEnvParagraph = hasCustomEnv
-                ? `\n\n\`\`\`ini\n${customEnvKeys
-                    .map((k) => `${k}=${customEnv[k]}`)
-                    .join('\n')}\n\`\`\``
-                : '';
-              const repeatParagraph = `
-<details>
-<summary>Repeat this build</summary>
-
-\`\`\`\`md
-${requestedBuildData.buildNames
-  .map((buildName) => `:rocket:[${buildName}]`)
-  .join('\n')}${repeatEnvParagraph}
-\`\`\`\`
-</details>
-`;
-              const perBuildResponse = (buildName: string, idx: number) =>
-                `* [${buildName}#${data[idx].number}](${data[idx].url}) scheduled at \`${data[idx].scheduled}\``;
-              const updatedComment = `pls gib green ༼ つ ◕_◕ ༽つ via ${
-                prData.head.sha
-              }:
-${requestedBuildData.buildNames
-  .map(perBuildResponse)
-  .join('\n')}${envParagraph}${repeatParagraph}`;
-              return githubUpdateComment(
-                octokit,
-                currentEventType,
-                eventBody.repository,
-                eventBody.comment.id,
-                updatedComment,
-              );
-            })
-            .then((commentData) => {
-              logger.info(
-                `Updated comment ${commentData.html_url} with build URL`,
-              );
-              return commentData.html_url;
-            });
-        })
-        .then(
-          (updatedCommentUrl) =>
-            done(
-              null,
-              {
-                success: true,
-                triggered: true,
-                commented: false,
-                updatedCommentUrl,
-              },
-              callback,
-            ),
-          (err) => done(err, undefined, callback),
-        );
     }
     case 'ping': {
       const eventBody = parseBody<WebhookEventMap[typeof currentEventType]>(
@@ -383,5 +254,137 @@ _Note: you can pass [custom environment variables](https://github.com/some-org/s
     triggered: false,
     commented: true,
     commentUrl: commentData.html_url,
+  };
+}
+
+async function commented(
+  eventBody: IssueCommentEvent | PullRequestReviewCommentEvent,
+  currentEventType: 'issue_comment' | 'pull_request_review_comment',
+  logger: Logger,
+  config: Config,
+  octokit: Octokit,
+): Promise<JSONResponse> {
+  if (eventBody.action === 'deleted') {
+    logger.info('Comment was deleted, nothing to do here');
+    return { success: true, triggered: false };
+  }
+  if (
+    isIssueComment(currentEventType, eventBody) &&
+    !eventBody.issue.pull_request
+  ) {
+    logger.info(
+      'Request is not coming from a pull request, nothing to do here',
+    );
+    return { success: true, triggered: false };
+  }
+  if (!isTriggerComment(eventBody.comment.body)) {
+    logger.info('Not a comment to trigger a build run, nothing to do here');
+    return { success: true, triggered: false };
+  }
+
+  const prHtmlUrl = isIssueComment(currentEventType, eventBody)
+    ? eventBody.issue.pull_request?.html_url
+    : eventBody.pull_request.html_url;
+
+  const requestedBuildData = parseTriggerComment(eventBody.comment.body);
+  const commentUrl = eventBody.comment.url;
+  const commenter = eventBody.sender.login;
+  logger.info(
+    `@${commenter} requested "${requestedBuildData.buildNames.join(',')}" for ${
+      prHtmlUrl || 'unkown URL'
+    }`, // TODO: better fallback for unkown URLs
+  );
+
+  const customEnv = requestedBuildData.env;
+  const customEnvKeys = Object.keys(requestedBuildData.env);
+  const hasCustomEnv = customEnvKeys.length > 0;
+  requestedBuildData.env = customEnvKeys.reduce<NodeJS.ProcessEnv>(
+    (ret, key) => {
+      ret[`GH_CONTROL_USER_ENV_${key}`] = requestedBuildData.env[key];
+      return ret;
+    },
+    {},
+  );
+
+  const [prData, { name: senderName, email: senderEmail }] = await Promise.all<
+    PullRequestData | PullRequest,
+    UserData
+  >([
+    isIssueComment(currentEventType, eventBody)
+      ? githubGetPullRequestDetails(
+          octokit,
+          eventBody.repository,
+          eventBody.issue.number,
+        )
+      : Promise.resolve(eventBody.pull_request as PullRequest),
+    (
+      await octokit.users.getByUsername({
+        username: eventBody.sender.login,
+      })
+    ).data,
+  ]);
+
+  const bkDatas = await buildkiteStartBuild(
+    logger,
+    config,
+    requestedBuildData,
+    prData,
+    commenter,
+    commentUrl,
+    senderName,
+    senderEmail ?? undefined,
+  );
+  const data = bkDatas.map((bkData) => {
+    const buildKiteWebUrl = bkData.web_url;
+    logger.info('Started Buildkite build %s', buildKiteWebUrl);
+    return {
+      url: buildKiteWebUrl,
+      number: bkData.number,
+      scheduled: bkData.scheduled_at,
+    };
+  });
+
+  const envParagraph = hasCustomEnv
+    ? `\n\nwith user-defined environment variables:\n\`\`\`ini\n${Object.keys(
+        requestedBuildData.env,
+      )
+        .map((k) => `${k}=${requestedBuildData.env[k]}`)
+        .join('\n')}\n\`\`\``
+    : '';
+  const repeatEnvParagraph = hasCustomEnv
+    ? `\n\n\`\`\`ini\n${customEnvKeys
+        .map((k) => `${k}=${customEnv[k]}`)
+        .join('\n')}\n\`\`\``
+    : '';
+  const repeatParagraph = `
+<details>
+<summary>Repeat this build</summary>
+
+\`\`\`\`md
+${requestedBuildData.buildNames
+  .map((buildName) => `:rocket:[${buildName}]`)
+  .join('\n')}${repeatEnvParagraph}
+\`\`\`\`
+</details>
+`;
+  const perBuildResponse = (buildName: string, idx: number) =>
+    `* [${buildName}#${data[idx].number}](${data[idx].url}) scheduled at \`${data[idx].scheduled}\``;
+  const updatedComment = `pls gib green ༼ つ ◕_◕ ༽つ via ${prData.head.sha}:
+${requestedBuildData.buildNames
+  .map(perBuildResponse)
+  .join('\n')}${envParagraph}${repeatParagraph}`;
+  const commentData = await githubUpdateComment(
+    octokit,
+    currentEventType,
+    eventBody.repository,
+    eventBody.comment.id,
+    updatedComment,
+  );
+  logger.info(`Updated comment ${commentData.html_url} with build URL`);
+  return {
+    success: true,
+    triggered: true,
+    commented: false,
+    updatedCommentUrl: commentData.html_url,
   };
 }

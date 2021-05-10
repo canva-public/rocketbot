@@ -432,14 +432,18 @@ describe('github-control', () => {
       );
 
       const body = 'This is no JSON';
-
       nock('https://api.github.com').get('/users/some-user').reply(200, body, {
         'Content-Type': 'application/json',
       });
 
-      await expect(handler(lambdaRequest, context, jest.fn())).rejects.toThrow(
-        /invalid json response body at https:\/\/api.github.com\/users\/some-user/,
-      );
+      try {
+        JSON.parse(body);
+      } catch (e) {
+        const res = await handler(lambdaRequest, context, jest.fn());
+        assertLambdaResponse(res, 400, {
+          error: `invalid json response body at https://api.github.com/users/some-user reason: ${e.message}`,
+        });
+      }
     });
 
     describe('ping', () => {
