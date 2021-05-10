@@ -53,12 +53,11 @@ export async function prOpened(
   );
 
   const pipelineList = sortBy(pipelines, ['slug'])
-    .map(
-      ({ slug, description }) =>
-        `| \`:rocket:[${slug}]\` | ${(description?.trim() ?? '')
-          .trim()
-          .replace(/\|/g, '\\|')} | ${links[slug]} |`,
-    )
+    .map(({ slug, description: desc }) => {
+      // TODO: proper markdown sanitization
+      const description = (desc?.trim() ?? '').trim().replace(/\|/g, '\\|');
+      return `| \`:rocket:[${slug}]\` | ${description} | ${links[slug]} |`;
+    })
     .join('\n');
   const commentData = await githubAddComment(
     octokit,
