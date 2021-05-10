@@ -57,7 +57,7 @@ const getLogger = (config: Config): PinoLambdaLogger =>
   });
 
 const getConfig = memoizeOne(async function (
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv,
 ): Promise<Config> {
   const secretsManagerKey = env[SECRETSMANAGER_CONFIG_KEY];
   if (secretsManagerKey) {
@@ -124,7 +124,7 @@ export const handler: APIGatewayProxyHandler = async (
   context: Context /* For legacy testing only */,
   callback?: Callback /* For legacy testing only */,
 ): Promise<APIGatewayProxyResult> => {
-  const config = await getConfig();
+  const config = await getConfig(process.env);
   const logger = getLogger(config);
   const octokit = await getOctokit(config, logger);
 
