@@ -8,12 +8,14 @@ import type {
 import type {
   PingEvent,
   PullRequest,
+  PullRequestEvent,
   Schema,
   WebhookEventMap,
   WebhookEventName,
 } from '@octokit/webhooks-types';
 import { isTriggerComment, parseTriggerComment } from './trigger';
 import { ok } from 'assert';
+import type { Logger } from 'pino';
 import type { PinoLambdaLogger } from 'pino-lambda';
 import pino from 'pino-lambda';
 import { Config, getConfig } from './config';
@@ -28,7 +30,7 @@ import {
   githubGetPullRequestDetails,
   githubUpdateComment,
 } from './github';
-import type { RestEndpointMethodTypes } from '@octokit/rest';
+import type { Octokit, RestEndpointMethodTypes } from '@octokit/rest';
 
 type PullRequestData = RestEndpointMethodTypes['pulls']['get']['response']['data'];
 type UserData = RestEndpointMethodTypes['users']['getByUsername']['response']['data'];
@@ -107,126 +109,15 @@ export const handler: APIGatewayProxyHandler = async (
       const eventBody = parseBody<WebhookEventMap[typeof currentEventType]>(
         event,
       );
-      if (eventBody.action !== 'opened') {
-        logger.info('PR was not opened, nothing to do here');
-        return done(null, { success: true, triggered: false }, callback);
-      }
-      const repoSshUrl = eventBody.repository.ssh_url;
-
-      logger.info('PR was opened');
-      return buildkiteReadPipelines(logger, config)
-        .then((pipelineData) =>
-          pipelineData
-            // is enabled for branch builds
-            .filter(
-              (pipeline) =>
-                'GH_CONTROL_IS_VALID_BRANCH_BUILD' in (pipeline.env || {}),
-            )
-            // corresponds to the pull request repo
-            .filter(
-              (pipeline) =>
-                urlPart(pipeline.repository) === urlPart(repoSshUrl),
-            ),
-        )
-        .then((pipelines) =>
-          Promise.all([
-            pipelines,
-            fetchDocumentationLinkMds(
-              octokit,
-              logger,
-              eventBody.repository,
-              eventBody.pull_request,
-              config.BUILDKITE_ORG_NAME,
-              pipelines,
-            ),
-          ]),
-        )
-        .then(([pipelines, linkMds]) =>
-          zip(pipelines, linkMds)
-            .map(([pipeline, linkMd]) => [
-              pipeline.slug,
-              (pipeline.description || '').trim(),
-              linkMd,
-            ])
-            .sort((a, b) => {
-              if (a[0] < b[0]) {
-                return -1;
-              }
-              if (a[0] > b[0]) {
-                return 1;
-              }
-              return 0;
-            }),
-        )
-        .then(
-          (pipelines) => {
-            if (!pipelines.length) {
-              logger.info(
-                'No matching/enabled pipelines for this repository, nothing to do here',
-              );
-              return done(
-                null,
-                {
-                  success: true,
-                  triggered: false,
-                  commented: false,
-                },
-                callback,
-              );
-            }
-            const pipelineList = pipelines
-              .map(
-                (row) =>
-                  `| \`:rocket:[${row[0]}]\` | ${row[1].replace(
-                    /\|/g,
-                    '\\|',
-                  )} | ${row[2]} |`,
-              )
-              .join('\n');
-            return githubAddComment(
-              octokit,
-              logger,
-              eventBody.repository,
-              eventBody.pull_request,
-              `
-:tada: Almost merged!
-<details>
-<summary>Request a branch build</summary>
-
-By commenting on this PR with: \`:rocket:[<pipeline>]\`, e.g.
-
-| Comment | Description | More info |
-| --- | --- | --- |
-${pipelineList}
-
-_Note: you can pass [custom environment variables](https://github.com/some-org/some-repo/blob/master/tools/github-control/#passing-custom-environment-variables) to some builds._
-
-> Pro-Tip: It is also possible to run multiple builds at once, like this: \`:rocket:[<pipeline-1>][...][<pipeline-n>]\`
-</details>`,
-            )
-              .then((commentData) => {
-                logger.info(
-                  `Left a comment ${commentData.html_url} on how to start branch builds on ${eventBody.pull_request.html_url}`,
-                );
-                return commentData.html_url;
-              })
-              .then(
-                (commentUrl) =>
-                  done(
-                    null,
-                    {
-                      success: true,
-                      triggered: false,
-                      commented: true,
-                      commentUrl,
-                    },
-                    callback,
-                  ),
-                (err) => done(err, undefined, callback),
-              );
-          },
-          (err) => done(err, undefined, callback),
+      try {
+        return done(
+          null,
+          await prOpened(eventBody, logger, config, octokit),
+          callback,
         );
+      } catch (e) {
+        return done(e, undefined, callback);
+      }
     }
     case 'issue_comment':
     case 'pull_request_review_comment': {
@@ -393,7 +284,7 @@ ${requestedBuildData.buildNames
   }
 };
 
-function ping(event: PingEvent) {
+function ping(event: PingEvent): JSONResponse {
   if (
     !event.hook.active ||
     !event.hook.events ||
@@ -408,5 +299,105 @@ function ping(event: PingEvent) {
     triggered: false,
     commented: false,
     message: `Hooks working for ${repository}`,
+  };
+}
+
+async function prOpened(
+  eventBody: PullRequestEvent,
+  logger: Logger,
+  config: Config,
+  octokit: Octokit,
+): Promise<JSONResponse> {
+  if (eventBody.action !== 'opened') {
+    logger.info('PR was not opened, nothing to do here');
+    return { success: true, triggered: false };
+  }
+  const repoSshUrl = eventBody.repository.ssh_url;
+
+  logger.info('PR was opened');
+  const pipelineData = await buildkiteReadPipelines(logger, config);
+
+  const validPipelines = pipelineData
+    // is enabled for branch builds
+    .filter(
+      (pipeline) => 'GH_CONTROL_IS_VALID_BRANCH_BUILD' in (pipeline.env || {}),
+    )
+    // corresponds to the pull request repo
+    .filter((pipeline) => urlPart(pipeline.repository) === urlPart(repoSshUrl));
+
+  if (!validPipelines.length) {
+    logger.info(
+      'No matching/enabled pipelines for this repository, nothing to do here',
+    );
+    return {
+      success: true,
+      triggered: false,
+      commented: false,
+    };
+  }
+
+  const linkMds = await fetchDocumentationLinkMds(
+    octokit,
+    logger,
+    eventBody.repository,
+    eventBody.pull_request,
+    config.BUILDKITE_ORG_NAME,
+    validPipelines,
+  );
+
+  const pipelines = zip(validPipelines, linkMds)
+    .map(([pipeline, linkMd]) => [
+      pipeline.slug,
+      (pipeline.description || '').trim(),
+      linkMd,
+    ])
+    .sort((a, b) => {
+      if (a[0] < b[0]) {
+        return -1;
+      }
+      if (a[0] > b[0]) {
+        return 1;
+      }
+      return 0;
+    });
+
+  const pipelineList = pipelines
+    .map(
+      (row) =>
+        `| \`:rocket:[${row[0]}]\` | ${row[1].replace(/\|/g, '\\|')} | ${
+          row[2]
+        } |`,
+    )
+    .join('\n');
+  const commentData = await githubAddComment(
+    octokit,
+    logger,
+    eventBody.repository,
+    eventBody.pull_request,
+    `
+:tada: Almost merged!
+<details>
+<summary>Request a branch build</summary>
+
+By commenting on this PR with: \`:rocket:[<pipeline>]\`, e.g.
+
+| Comment | Description | More info |
+| --- | --- | --- |
+${pipelineList}
+
+_Note: you can pass [custom environment variables](https://github.com/some-org/some-repo/blob/master/tools/github-control/#passing-custom-environment-variables) to some builds._
+
+> Pro-Tip: It is also possible to run multiple builds at once, like this: \`:rocket:[<pipeline-1>][...][<pipeline-n>]\`
+</details>`,
+  );
+
+  logger.info(
+    `Left a comment ${commentData.html_url} on how to start branch builds on ${eventBody.pull_request.html_url}`,
+  );
+  return {
+    success: true,
+    triggered: false,
+    commented: true,
+    commentUrl: commentData.html_url,
   };
 }
