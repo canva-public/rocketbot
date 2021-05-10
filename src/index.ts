@@ -20,7 +20,6 @@ import type { PinoLambdaLogger } from 'pino-lambda';
 import pino from 'pino-lambda';
 import { Config, getConfig } from './config';
 import { buildkiteReadPipelines, buildkiteStartBuild } from './buildkite';
-import { zip } from './zip';
 import { getOctokit, isOctokitRequestError } from './octokit';
 import { fetchDocumentationLinkMds } from './initial_comment';
 import { urlPart } from './url_part';
@@ -31,6 +30,7 @@ import {
   githubUpdateComment,
 } from './github';
 import type { Octokit, RestEndpointMethodTypes } from '@octokit/rest';
+import sortBy from 'lodash.sortby';
 
 type PullRequestData = RestEndpointMethodTypes['pulls']['get']['response']['data'];
 type UserData = RestEndpointMethodTypes['users']['getByUsername']['response']['data'];
@@ -317,7 +317,7 @@ async function prOpened(
   logger.info('PR was opened');
   const pipelineData = await buildkiteReadPipelines(logger, config);
 
-  const validPipelines = pipelineData
+  const pipelines = pipelineData
     // is enabled for branch builds
     .filter(
       (pipeline) => 'GH_CONTROL_IS_VALID_BRANCH_BUILD' in (pipeline.env || {}),
@@ -325,7 +325,7 @@ async function prOpened(
     // corresponds to the pull request repo
     .filter((pipeline) => urlPart(pipeline.repository) === urlPart(repoSshUrl));
 
-  if (!validPipelines.length) {
+  if (!pipelines.length) {
     logger.info(
       'No matching/enabled pipelines for this repository, nothing to do here',
     );
@@ -336,37 +336,21 @@ async function prOpened(
     };
   }
 
-  const linkMds = await fetchDocumentationLinkMds(
+  const links = await fetchDocumentationLinkMds(
     octokit,
     logger,
     eventBody.repository,
     eventBody.pull_request,
     config.BUILDKITE_ORG_NAME,
-    validPipelines,
+    pipelines,
   );
 
-  const pipelines = zip(validPipelines, linkMds)
-    .map(([pipeline, linkMd]) => [
-      pipeline.slug,
-      (pipeline.description || '').trim(),
-      linkMd,
-    ])
-    .sort((a, b) => {
-      if (a[0] < b[0]) {
-        return -1;
-      }
-      if (a[0] > b[0]) {
-        return 1;
-      }
-      return 0;
-    });
-
-  const pipelineList = pipelines
+  const pipelineList = sortBy(pipelines, ['slug'])
     .map(
-      (row) =>
-        `| \`:rocket:[${row[0]}]\` | ${row[1].replace(/\|/g, '\\|')} | ${
-          row[2]
-        } |`,
+      ({ slug, description }) =>
+        `| \`:rocket:[${slug}]\` | ${(description?.trim() ?? '')
+          .trim()
+          .replace(/\|/g, '\\|')} | ${links[slug]} |`,
     )
     .join('\n');
   const commentData = await githubAddComment(

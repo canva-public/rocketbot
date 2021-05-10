@@ -64,7 +64,7 @@ export type Pipeline = {
   slug: string;
   repository: string;
   env?: Dict<string>;
-  description?: string;
+  description?: string | null;
 };
 
 /**

@@ -20,13 +20,20 @@ function loadFixture(fixturePath: string) {
 }
 
 function assertLambdaResponse(
-  response: APIGatewayProxyResult | undefined,
+  response: APIGatewayProxyResult | undefined | void,
   expectedStatus: APIGatewayProxyResult['statusCode'],
   expectedBody: JSONResponse,
 ) {
   ok(response);
-  expect(response.statusCode).toStrictEqual(expectedStatus);
-  expect(JSON.parse(response.body)).toStrictEqual(expectedBody);
+  expect({ ...response, body: JSON.parse(response.body) }).toStrictEqual(
+    expect.objectContaining({
+      statusCode: expectedStatus,
+      body: expectedBody,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    }),
+  );
 }
 
 function assertNockDone() {
@@ -41,6 +48,9 @@ describe('github-control', () => {
   let context: Context;
   beforeEach(() => {
     context = (jest.fn<Context, never>() as unknown) as Context;
+  });
+  afterEach(() => {
+    assertNockDone();
   });
   describe('general', () => {
     describe('comment matching', () => {
@@ -358,7 +368,6 @@ describe('github-control', () => {
         if (err) {
           throw err;
         }
-        assertNockDone();
         assertLambdaResponse(res, 400, {
           error: 'Request Failed. Status Code: 401',
         });
@@ -389,7 +398,6 @@ describe('github-control', () => {
         if (err) {
           throw err;
         }
-        assertNockDone();
         assertLambdaResponse(res, 401, {
           error: 'Bad credentials',
         });
@@ -410,7 +418,6 @@ describe('github-control', () => {
         if (err) {
           throw err;
         }
-        assertNockDone();
         assertLambdaResponse(res, 400, {
           error:
             'Invalid content-type. Expected application/json but received text/plain',
@@ -496,7 +503,6 @@ describe('github-control', () => {
           if (err) {
             throw err;
           }
-          assertNockDone();
           assertLambdaResponse(res, 200, {
             success: true,
             triggered: false,
@@ -538,18 +544,14 @@ describe('github-control', () => {
           )
           .reply(200, docSomePipelineLite);
 
-        await handler(lambdaRequest, context, (err, res) => {
-          if (err) {
-            throw err;
-          }
-          assertNockDone();
-          assertLambdaResponse(res, 200, {
-            success: true,
-            triggered: false,
-            commented: true,
-            commentUrl:
-              'https://github.com/some-org/some-repo/pull/1111111#issuecomment-280987786',
-          });
+        const res = await handler(lambdaRequest, context, jest.fn());
+
+        assertLambdaResponse(res, 200, {
+          success: true,
+          triggered: false,
+          commented: true,
+          commentUrl:
+            'https://github.com/some-org/some-repo/pull/1111111#issuecomment-280987786',
         });
       });
 
@@ -576,7 +578,6 @@ describe('github-control', () => {
           if (err) {
             throw err;
           }
-          assertNockDone();
         });
       });
     });
@@ -628,7 +629,6 @@ describe('github-control', () => {
           if (err) {
             throw err;
           }
-          assertNockDone();
           assertLambdaResponse(res, 200, {
             success: true,
             triggered: true,
@@ -697,7 +697,6 @@ describe('github-control', () => {
           if (err) {
             throw err;
           }
-          assertNockDone();
           assertLambdaResponse(res, 200, {
             success: true,
             triggered: true,
@@ -756,7 +755,6 @@ describe('github-control', () => {
           if (err) {
             throw err;
           }
-          assertNockDone();
           assertLambdaResponse(res, 200, {
             success: true,
             triggered: true,
@@ -777,7 +775,6 @@ describe('github-control', () => {
           if (err) {
             throw err;
           }
-          assertNockDone();
           assertLambdaResponse(res, 200, {
             success: true,
             triggered: false,
@@ -793,7 +790,6 @@ describe('github-control', () => {
           if (err) {
             throw err;
           }
-          assertNockDone();
           assertLambdaResponse(res, 200, {
             success: true,
             triggered: false,
@@ -844,7 +840,6 @@ describe('github-control', () => {
           if (err) {
             throw err;
           }
-          assertNockDone();
           assertLambdaResponse(res, 200, {
             success: true,
             triggered: true,

@@ -48,7 +48,7 @@ export async function fetchDocumentationLinkMds(
   prData: PullRequest,
   orgSlug: string,
   pipelines: Pipeline[],
-): Promise<string[]> {
+): Promise<Dict<string>> {
   const documentationUrls = await fetchDocumentationUrls(
     octokit,
     logger,
@@ -58,16 +58,17 @@ export async function fetchDocumentationLinkMds(
     pipelines,
   );
 
-  return pipelines.map((pipeline) => {
+  return pipelines.reduce<Dict<string>>((acc, pipeline) => {
     const documentationUrl = documentationUrls[pipeline.slug];
-    return documentationUrl
+    acc[pipeline.slug] = documentationUrl
       ? `[:information_source:](${documentationUrl} "See more information")`
       : `[:heavy_plus_sign:](${getDocumentationCreationLink(
           prData,
           orgSlug,
           pipeline,
         )} "Add more information")`;
-  });
+    return acc;
+  }, {});
 }
 
 /**
