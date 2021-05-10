@@ -8,6 +8,16 @@ import memoizeOne from 'memoize-one';
 type Dict<T> = Record<string, T>;
 type PullRequestData = RestEndpointMethodTypes['pulls']['get']['response']['data'];
 
+const gotInstance = memoizeOne((config: Config) => {
+  return got.extend({
+    prefixUrl: `https://api.buildkite.com/v2/organizations/${config.BUILDKITE_ORG_NAME}`,
+    headers: {
+      Authorization: `Bearer ${config.BUILDKITE_TOKEN}`,
+    },
+    responseType: 'json',
+  });
+});
+
 /**
  * Returns all defined Buildkite pipelines in the current organization
  */
@@ -17,38 +27,32 @@ export async function buildkiteReadPipelines(
 ): Promise<Pipeline[]> {
   logger.debug('Reading pipelines');
 
-  return got.paginate.all<Pipeline>(
-    new URL(
-      `/v2/organizations/${config.BUILDKITE_ORG_NAME}/pipelines`,
-      'https://api.buildkite.com',
-    ),
-    {
-      headers: {
-        Authorization: `Bearer ${config.BUILDKITE_TOKEN}`,
-      },
-      responseType: 'json',
-      searchParams: {
-        page: 1,
-        per_page: 100,
-      },
-      pagination: {
-        paginate: (response) => {
-          const { headers } = response;
-          if (!headers.link || headers.link.indexOf('rel="next"') === -1) {
-            return false;
-          }
-          const previousSearchParams = response.request.options.searchParams;
-          const previousPage = previousSearchParams?.get('page');
-          return {
-            searchParams: {
-              ...previousSearchParams,
-              page: Number(previousPage) + 1,
-            },
-          };
-        },
+  const {
+    paginate: { all },
+  } = gotInstance(config);
+
+  return all<Pipeline>('pipelines', {
+    searchParams: {
+      page: 1,
+      per_page: 100,
+    },
+    pagination: {
+      paginate: (response) => {
+        const { headers } = response;
+        if (!headers.link || headers.link.indexOf('rel="next"') === -1) {
+          return false;
+        }
+        const previousSearchParams = response.request.options.searchParams;
+        const previousPage = previousSearchParams?.get('page');
+        return {
+          searchParams: {
+            ...previousSearchParams,
+            page: Number(previousPage) + 1,
+          },
+        };
       },
     },
-  );
+  });
 }
 
 /**
@@ -105,21 +109,12 @@ export async function buildkiteStartBuild(
       GH_CONTROL_PR_BASE_REPO: prData.base.repo.full_name,
     },
   };
+  const { post } = gotInstance(config);
   return Promise.all(
     buildData.buildNames.map(async (buildName) => {
-      const { body } = await got.post<Build>(
-        new URL(
-          `/v2/organizations/${config.BUILDKITE_ORG_NAME}/pipelines/${buildName}/builds`,
-          'https://api.buildkite.com',
-        ),
-        {
-          json: requestBody,
-          headers: {
-            Authorization: `Bearer ${config.BUILDKITE_TOKEN}`,
-          },
-          responseType: 'json',
-        },
-      );
+      const { body } = await post<Build>(`pipelines/${buildName}/builds`, {
+        json: requestBody,
+      });
       return body;
     }),
   );

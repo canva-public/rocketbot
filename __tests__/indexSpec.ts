@@ -528,14 +528,14 @@ describe('github-control', () => {
           'pull_request/buildkite/pipelines_page2',
         );
 
-        nock('https://api.buildkite.com:443')
+        nock('https://api.buildkite.com')
           .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
           .reply(200, pipelinesReply, {
             Link:
-              '<https://api.buildkite.com/v2/organizations/my-great-org/pipelines?page=2&per_page=100>; rel="next", <https://api.buildkite.com/v2/organizations/some-org/pipelines?page=2&per_page=100>; rel="last"',
+              '<https://api.buildkite.com/v2/organizations/some-org/pipelines?page=2&per_page=100>; rel="next", <https://api.buildkite.com/v2/organizations/some-org/pipelines?page=2&per_page=100>; rel="last"',
           });
 
-        nock('https://api.buildkite.com:443')
+        nock('https://api.buildkite.com')
           .get('/v2/organizations/some-org/pipelines?page=2&per_page=100')
           .reply(200, pipelinesReplyPage2);
 
