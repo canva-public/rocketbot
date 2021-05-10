@@ -341,13 +341,13 @@ describe('github-control', () => {
       expect.hasAssertions();
       const lambdaRequest = loadFixture('pull_request/lambda_request');
 
-      nock('https://api.buildkite.com:443')
+      nock('https://api.buildkite.com')
         .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
         .reply(401, { message: 'Authorization failed' });
 
       const res = await handler(lambdaRequest, context);
       assertLambdaResponse(res, 400, {
-        error: 'Request Failed. Status Code: 401',
+        error: 'Response code 401 (Unauthorized)',
       });
       assertNockDone();
     });
@@ -392,7 +392,7 @@ describe('github-control', () => {
       const res = await handler(lambdaRequest, context);
       assertLambdaResponse(res, 400, {
         error:
-          'Invalid content-type. Expected application/json but received text/plain',
+          'Unexpected token T in JSON at position 0 in "https://api.buildkite.com/v2/organizations/some-org/pipelines?page=1&per_page=100"',
       });
       assertNockDone();
     });
