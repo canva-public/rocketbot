@@ -378,7 +378,11 @@ ${requestedBuildData.buildNames
       const eventBody = parseBody<WebhookEventMap[typeof currentEventType]>(
         event,
       );
-      return ping(eventBody, done, callback);
+      try {
+        return done(null, ping(eventBody), callback);
+      } catch (e) {
+        return done(e, undefined, callback);
+      }
     }
     default:
       return done(
@@ -389,29 +393,20 @@ ${requestedBuildData.buildNames
   }
 };
 
-function ping(event: PingEvent, d: typeof done, callback?: Callback) {
+function ping(event: PingEvent) {
   if (
     !event.hook.active ||
     !event.hook.events ||
-    event.hook.events.indexOf('issue_comment') === -1
+    !event.hook.events.includes('issue_comment')
   ) {
-    return d(
-      new Error('Configure at least the delivery of issue comments'),
-      undefined,
-      callback,
-    );
+    throw new Error('Configure at least the delivery of issue comments');
   }
-
   const repository = event.repository?.full_name ?? 'unknown repository';
 
-  return d(
-    null,
-    {
-      success: true,
-      triggered: false,
-      commented: false,
-      message: `Hooks working for ${repository}`,
-    },
-    callback,
-  );
+  return {
+    success: true,
+    triggered: false,
+    commented: false,
+    message: `Hooks working for ${repository}`,
+  };
 }
