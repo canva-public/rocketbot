@@ -147,11 +147,6 @@ async function fetchDocumentationUrls(
  *   /canva-org?filename=some-pipeline.md
  *   &value=%23%20some-pipeline%0A%0A%5B
  *   Document%20some-pipeline%27s%20RocketBot%20options%20here%5D
- *
- * @param prData Data belonging to the PR which this markdown should be produced for.
- * @param orgSlug The Buildkite organization which this markdown should be produced for.
- * @param pipeline An array of pipeline objects.
- * @return A link.
  */
 function getDocumentationCreationLink(
   prData: PullRequest,
@@ -159,7 +154,6 @@ function getDocumentationCreationLink(
   pipeline: Pipeline,
 ) {
   return (
-    '' +
     `https://github.com/${prData.head.repo.full_name}` +
     `/new/${prData.head.repo.default_branch}` +
     '/.buildkite/pipeline/description' +

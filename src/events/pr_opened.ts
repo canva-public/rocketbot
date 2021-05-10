@@ -3,11 +3,11 @@ import { Logger } from 'pino';
 import { Config } from '../config';
 import { buildkiteReadPipelines } from '../buildkite';
 import { fetchDocumentationLinkMds } from '../initial_comment';
-import { urlPart } from '../url_part';
 import { githubAddComment } from '../github';
 import { Octokit } from '@octokit/rest';
 import sortBy from 'lodash.sortby';
 import { JSONResponse } from '../response';
+import gitUrlParse from 'git-url-parse';
 
 const validBranchBuildEnvVarMarker = 'GH_CONTROL_IS_VALID_BRANCH_BUILD';
 
@@ -22,18 +22,27 @@ export async function prOpened(
     return { success: true, triggered: false };
   }
   const repoSshUrl = eventBody.repository.ssh_url;
-  const repoSshUrlUrlPart = urlPart(repoSshUrl);
+  const eventGitUrl = gitUrlParse(repoSshUrl);
 
   logger.info('PR was opened');
   const pipelineData = await buildkiteReadPipelines(logger, config);
 
-  const pipelines = pipelineData.filter(
-    (pipeline) =>
-      // is enabled for branch builds
-      validBranchBuildEnvVarMarker in (pipeline.env || {}) &&
-      // corresponds to the pull request repo
-      urlPart(pipeline.repository) === repoSshUrlUrlPart,
-  );
+  const pipelines = pipelineData.filter((pipeline) => {
+    if (!(validBranchBuildEnvVarMarker in (pipeline.env || {}))) {
+      // is not enabled for branch builds
+      return false;
+    }
+
+    const pipelineGitUrl = gitUrlParse(pipeline.repository);
+    if (
+      pipelineGitUrl.name !== eventGitUrl.name ||
+      pipelineGitUrl.owner !== eventGitUrl.owner
+    ) {
+      // current repo does not correspond to the pull request repo
+      return false;
+    }
+    return true;
+  });
 
   if (!pipelines.length) {
     logger.info(
