@@ -9,6 +9,8 @@ import { Octokit } from '@octokit/rest';
 import sortBy from 'lodash.sortby';
 import { JSONResponse } from '../response';
 
+const validBranchBuildEnvVarMarker = 'GH_CONTROL_IS_VALID_BRANCH_BUILD';
+
 export async function prOpened(
   eventBody: PullRequestEvent,
   logger: Logger,
@@ -20,17 +22,18 @@ export async function prOpened(
     return { success: true, triggered: false };
   }
   const repoSshUrl = eventBody.repository.ssh_url;
+  const repoSshUrlUrlPart = urlPart(repoSshUrl);
 
   logger.info('PR was opened');
   const pipelineData = await buildkiteReadPipelines(logger, config);
 
-  const pipelines = pipelineData
-    // is enabled for branch builds
-    .filter(
-      (pipeline) => 'GH_CONTROL_IS_VALID_BRANCH_BUILD' in (pipeline.env || {}),
-    )
-    // corresponds to the pull request repo
-    .filter((pipeline) => urlPart(pipeline.repository) === urlPart(repoSshUrl));
+  const pipelines = pipelineData.filter(
+    (pipeline) =>
+      // is enabled for branch builds
+      validBranchBuildEnvVarMarker in (pipeline.env || {}) &&
+      // corresponds to the pull request repo
+      urlPart(pipeline.repository) === repoSshUrlUrlPart,
+  );
 
   if (!pipelines.length) {
     logger.info(

@@ -35,16 +35,11 @@ function template(
 
 /**
  * Fetch data to produce markdown linking to documentation a single pipeline
- *
- * @param repository The repository this pull request belongs to
- * @param prData Data belonging to the PR which this markdown should be produced for.
- * @param orgSlug The Buildkite organization which this markdown should be produced for.
- * @param pipelines An array of pipeline objects.
  */
 export async function fetchDocumentationLinkMds(
   octokit: Octokit,
   logger: Logger,
-  repository: Repository,
+  repository: Repository /** The repository this pull request belongs to */,
   prData: PullRequest,
   orgSlug: string,
   pipelines: Pipeline[],
@@ -73,11 +68,6 @@ export async function fetchDocumentationLinkMds(
 
 /**
  * Fetch the URL linking to documentation for a pipeline
- *
- * @param repository The repository this pull request belongs to
- * @param prData Data belonging to the PR which this markdown should be produced for.
- * @param orgSlug The Buildkite organization which this markdown should be produced for.
- * @param pipelines An array of pipeline objects.
  */
 async function fetchDocumentationUrls(
   octokit: Octokit,
