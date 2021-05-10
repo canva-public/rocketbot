@@ -178,7 +178,6 @@ async function jsonRequest<T = Record<string, unknown>>(
 ): Promise<{ body: T; headers: IncomingHttpHeaders }> {
   const localOptions: RequestOptions = { ...options };
   localOptions.headers = Object.assign(options.headers || {}, {
-    'User-Agent': 'githubHook/2.0.1', // Note: this is mandatory for the GitHub API
     'Content-Type': 'application/json',
   });
 
