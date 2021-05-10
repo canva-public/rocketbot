@@ -75,7 +75,7 @@ By commenting on this PR with: \`:rocket:[<pipeline>]\`, e.g.
 | --- | --- | --- |
 ${pipelineList}
 
-_Note: you can pass [custom environment variables](https://github.com/some-org/some-repo/blob/master/tools/github-control/#passing-custom-environment-variables) to some builds._
+_Note: you can pass [custom environment variables](https://github.com/canva-public/rocketbot/blob/main/docs/guides/pass-in-variables.md) to some builds._
 
 > Pro-Tip: It is also possible to run multiple builds at once, like this: \`:rocket:[<pipeline-1>][...][<pipeline-n>]\`
 </details>`,
