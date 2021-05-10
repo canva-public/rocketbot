@@ -324,7 +324,7 @@ async function commented(
     ).data,
   ]);
 
-  const bkDatas = await buildkiteStartBuild(
+  const builds = await buildkiteStartBuild(
     logger,
     config,
     requestedBuildData,
@@ -334,13 +334,12 @@ async function commented(
     senderName,
     senderEmail ?? undefined,
   );
-  const data = bkDatas.map((bkData) => {
-    const buildKiteWebUrl = bkData.web_url;
-    logger.info('Started Buildkite build %s', buildKiteWebUrl);
+  const data = builds.map((build) => {
+    logger.info('Started Buildkite build %s', build.web_url);
     return {
-      url: buildKiteWebUrl,
-      number: bkData.number,
-      scheduled: bkData.scheduled_at,
+      url: build.web_url,
+      number: build.number,
+      scheduled: build.scheduled_at,
     };
   });
 
