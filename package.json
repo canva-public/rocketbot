@@ -10,7 +10,8 @@
     "test:watch": "jest --watch --notify",
     "build": "rimraf ./dist && rollup -c",
     "prepare": "husky install",
-    "test-dist": "yarn build && sam local invoke 'RocketBot' -e event.json --env-vars env.json"
+    "pretest-dist": "yarn build",
+    "test-dist": "sam local invoke 'RocketBot' -e event.json --env-vars env.json"
   },
   "repository": {
     "type": "git",

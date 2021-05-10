@@ -44,15 +44,15 @@ type Config = {
   BUILDKITE_ORG_NAME: string; // (the URL part of `https://buildkite.com/<your-org>/`)
   ENABLE_DEBUG: string; // defaults to "false"
 } & (
-  | // RocketBot uses a GitHub app. Recommended.
-  {
+  | {
+      // RocketBot uses a GitHub app. Recommended.
       GITHUB_APP_APP_ID: string;
       // make sure to keep the preamble and newlines, e.g.: `"-----BEGIN RSA PRIVATE KEY-----\nline 1\nline 2\n-----END RSA PRIVATE KEY-----\n"
       GITHUB_APP_PRIVATE_KEY: string;
       GITHUB_APP_INSTALLATION_ID: string;
     }
-  // RocketBot uses a personal access token. Not recommended.
   | {
+      // RocketBot uses a personal access token. Not recommended.
       GITHUB_TOKEN: string; // a personal access token of a user with write access
     }
 );
@@ -62,7 +62,11 @@ You can either provide a key for AWS SecretsManager via a
 
 - `SECRETSMANAGER_CONFIG_KEY`
 
-variable, which holds a JSON object satisfying the above schema (recommended)
+variable, which holds a JSON object satisfying the above schema (recommended):
+
+```hcl
+"{\"GITHUB_APP_PRIVATE_KEY\":\"...\",\"GITHUB_APP_INSTALLATION_ID\":\"...\",\"GITHUB_APP_APP_ID\":\"...\",\"GITHUB_TOKEN\":\"...\",\"BUILDKITE_TOKEN\":\"...\",\"BUILDKITE_ORG_NAME\":\"...\",\"ENABLE_DEBUG\":\"false\"}"
+```
 
 or you make the following environment variables available to your Lambda function:
 
