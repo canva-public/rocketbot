@@ -27,8 +27,6 @@ class Http404Error extends HttpError {
 
 /**
  * Returns all defined Buildkite pipelines in the current organization
- *
- * @return A promise resolving to the decoded JSON data of the Buildkite API response
  */
 export async function buildkiteReadPipelines(
   logger: Logger,
@@ -68,29 +66,20 @@ export type Pipeline = {
 };
 
 /**
- * Starts a buildkite build
- *
- * @param buildData The Buildkite data
- *        containing the build slug (/pipelines/$buildName/...) in .buildNames and any user-defined
- *        environment variables in .env (they will be available in the Buildkite build prefixed with
- *        `GH_CONTROL_USER_ENV_`.
- *        A user-defined environment variable X=Y would become GH_CONTROL_USER_ENV_X=Y
- * @param prData The pull request data
- * @param requester The github username of the person requesting the build
- * @param senderName The full name of the person requesting the build
- * @param commentUrl The URL of the comment requesting the build
- * @param senderEmail The email address of the person requesting the build
- * @return A promise resolving to the decoded JSON data of the Buildkite API response
+ * Starts one or more buildkite builds
  */
 export async function buildkiteStartBuild(
   logger: Logger,
   config: Config,
-  buildData: { buildNames: string[]; env: NodeJS.ProcessEnv },
+  buildData: {
+    buildNames: string[] /** the pipeline slugs */;
+    env: NodeJS.ProcessEnv;
+  },
   prData: PullRequestData | PullRequest,
-  requester: string,
-  commentUrl: string,
-  senderName?: string,
-  senderEmail?: string,
+  requester: string /** The github username of the person requesting the build */,
+  commentUrl: string /** The URL of the comment requesting the build */,
+  senderName?: string /** The full name of the person requesting the build */,
+  senderEmail?: string /** The email address of the person requesting the build */,
 ): Promise<Build[]> {
   const branch = prData.head.ref;
   const commit = prData.head.sha;
