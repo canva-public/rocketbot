@@ -5,6 +5,7 @@ import commonjs from '@rollup/plugin-commonjs';
 import json from '@rollup/plugin-json';
 import nodeResolve from '@rollup/plugin-node-resolve';
 import typescript from '@rollup/plugin-typescript';
+import { terser } from 'rollup-plugin-terser';
 
 const defaultConfig = {
   plugins: [
@@ -20,6 +21,9 @@ const defaultConfig = {
   ],
   input: 'src/index.ts',
   external: ['aws-sdk'],
+  output: {
+    plugins: [terser()],
+  },
 };
 
 const { Resources } = yamlParse(readFileSync('template.yml'));
@@ -31,6 +35,7 @@ const entries = Object.values(Resources)
     return {
       ...defaultConfig,
       output: {
+        ...defaultConfig.output,
         format: 'cjs',
         file: join('.', resource.Properties.CodeUri, `${file}.js`),
       },
