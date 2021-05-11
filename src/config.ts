@@ -1,4 +1,3 @@
-import { ok } from 'assert';
 import { z } from 'zod';
 import { SecretsManager } from 'aws-sdk';
 import memoizeOne from 'memoize-one';
@@ -26,20 +25,21 @@ export const Config = z.union([
 
 export type Config = z.infer<typeof Config>;
 
-export const getConfig = memoizeOne(async function (
+const getSecretValue = memoizeOne(async (SecretId: string) => {
+  const client = new SecretsManager();
+
+  const value = await client.getSecretValue({ SecretId }).promise();
+  return Config.parse(JSON.parse(value.SecretString ?? ''));
+});
+
+export const getConfig = async function (
   env: NodeJS.ProcessEnv,
 ): Promise<Config> {
   const secretsManagerKey = env[SECRETSMANAGER_CONFIG_KEY];
   if (secretsManagerKey) {
     // if we have a secretsmanager config key, we use that to load the config
-    ok(secretsManagerKey);
-    const client = new SecretsManager();
-
-    const value = await client
-      .getSecretValue({ SecretId: secretsManagerKey })
-      .promise();
-    return Config.parse(JSON.parse(value.SecretString ?? ''));
+    return getSecretValue(secretsManagerKey);
   } else {
     return Config.parse(env);
   }
-});
+};
