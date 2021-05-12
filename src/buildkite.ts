@@ -35,14 +35,63 @@ export async function buildkiteReadPipelines(
 }
 
 /**
- * Incomplete (e.g. only the subset needed by this lambda) type descriptor for the response
+ * Incomplete type descriptor for the response
  * of https://buildkite.com/docs/apis/rest-api/pipelines
  */
 export type Pipeline = {
+  id: string;
+  graphql_id: string;
+  url: string;
+  web_url: string;
+  name: string;
+  description?: string | null; // TODO: this can only ever be empty string, not `undefined` or `null`
   slug: string;
   repository: string;
+  cluster_id: string | null;
+  branch_configuration: null | unknown;
+  default_branch: string;
+  skip_queued_branch_builds: boolean;
+  skip_queued_branch_builds_filter: string | null;
+  cancel_running_branch_builds: boolean;
+  cancel_running_branch_builds_filter: string | null;
+  allow_rebuilds: true;
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  provider: object;
+  builds_url: string;
+  badge_url: string;
+  created_by: {
+    id: string;
+    graphql_id: string;
+    name: string;
+    email: string;
+    avatar_url: string;
+    created_at: string;
+  };
+  created_at: string;
+  archived_at: null | string;
   env?: Dict<string>;
-  description?: string | null;
+  scheduled_builds_count: number;
+  running_builds_count: number;
+  scheduled_jobs_count: number;
+  running_jobs_count: number;
+  waiting_jobs_count: number;
+  visibility: 'private' | unknown;
+  tags: null | unknown;
+  configuration: string;
+  steps: Step[];
+};
+
+type Step = {
+  type: 'script' | unknown;
+  name: null | string;
+  command: string;
+  artifact_paths: null | unknown;
+  branch_configuration: null | string;
+  env: Dict<string>;
+  timeout_in_minutes: null | unknown;
+  agent_query_rules: unknown[];
+  concurrency: null | unknown;
+  parallelism: null | unknown;
 };
 
 /**

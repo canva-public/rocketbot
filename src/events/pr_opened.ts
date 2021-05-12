@@ -1,15 +1,35 @@
 import { PullRequestEvent } from '@octokit/webhooks-types';
 import { Logger } from 'pino';
 import { Config } from '../config';
-import { buildkiteReadPipelines } from '../buildkite';
+import { buildkiteReadPipelines, Pipeline } from '../buildkite';
 import { fetchDocumentationLinkMds } from '../initial_comment';
 import { githubAddComment } from '../github';
 import { Octokit } from '@octokit/rest';
 import sortBy from 'lodash.sortby';
 import { JSONResponse } from '../response';
-import gitUrlParse from 'git-url-parse';
+import gitUrlParse, { GitUrl } from 'git-url-parse';
 
 const validBranchBuildEnvVarMarker = 'GH_CONTROL_IS_VALID_BRANCH_BUILD';
+
+export function isMarkedPipeline(
+  eventGitUrl: GitUrl,
+  pipeline: Pick<Pipeline, 'env' | 'repository'>,
+): boolean {
+  if (!(validBranchBuildEnvVarMarker in (pipeline.env || {}))) {
+    // is not enabled for branch builds
+    return false;
+  }
+
+  const pipelineGitUrl = gitUrlParse(pipeline.repository);
+  if (
+    pipelineGitUrl.name !== eventGitUrl.name ||
+    pipelineGitUrl.owner !== eventGitUrl.owner
+  ) {
+    // current repo does not correspond to the pull request repo
+    return false;
+  }
+  return true;
+}
 
 export async function prOpened(
   eventBody: PullRequestEvent,
@@ -27,22 +47,9 @@ export async function prOpened(
   logger.info('PR was opened');
   const pipelineData = await buildkiteReadPipelines(logger, config);
 
-  const pipelines = pipelineData.filter((pipeline) => {
-    if (!(validBranchBuildEnvVarMarker in (pipeline.env || {}))) {
-      // is not enabled for branch builds
-      return false;
-    }
-
-    const pipelineGitUrl = gitUrlParse(pipeline.repository);
-    if (
-      pipelineGitUrl.name !== eventGitUrl.name ||
-      pipelineGitUrl.owner !== eventGitUrl.owner
-    ) {
-      // current repo does not correspond to the pull request repo
-      return false;
-    }
-    return true;
-  });
+  const pipelines = pipelineData.filter(
+    isMarkedPipeline.bind(null, eventGitUrl),
+  );
 
   if (!pipelines.length) {
     logger.info(
