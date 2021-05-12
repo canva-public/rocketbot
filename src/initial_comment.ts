@@ -153,12 +153,19 @@ function getDocumentationCreationLink(
   orgSlug: string,
   pipeline: Pipeline,
 ) {
-  return (
-    `https://github.com/${prData.head.repo.full_name}` +
-    `/new/${prData.head.repo.default_branch}` +
-    '/.buildkite/pipeline/description' +
-    `/${orgSlug}?filename=${pipeline.slug}.md` +
-    `&value=%23%20${pipeline.slug}%0A%0A%5B` +
-    `Document%20${pipeline.slug}%27s%20RocketBot%20options%20here%5D`
+  const url = new URL(
+    `/new/${prData.head.repo.default_branch}`,
+    `https://github.com/${prData.head.repo.full_name}`,
   );
+  url.searchParams.append(
+    'filename',
+    `.buildkite/pipeline/description/${orgSlug}/${pipeline.slug}.md`,
+  );
+  url.searchParams.append(
+    'value',
+    `# ${pipeline.slug}
+
+[Document ${pipeline.slug}'s RocketBot options here]`,
+  );
+  return url.toString();
 }
