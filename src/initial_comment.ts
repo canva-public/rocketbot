@@ -154,8 +154,8 @@ function getDocumentationCreationLink(
   pipeline: Pipeline,
 ) {
   const url = new URL(
-    `/new/${prData.head.repo.default_branch}`,
-    `https://github.com/${prData.head.repo.full_name}`,
+    `/${prData.head.repo.full_name}/new/${prData.head.repo.default_branch}`,
+    `https://github.com`,
   );
   url.searchParams.append(
     'filename',
