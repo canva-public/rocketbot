@@ -4,7 +4,6 @@ import type {
   Context,
 } from 'aws-lambda';
 import type {
-  Schema,
   WebhookEventMap,
   WebhookEventName,
 } from '@octokit/webhooks-types';
@@ -17,6 +16,7 @@ import { commented } from './events/commented';
 import type { JSONResponse } from './response';
 import { ping } from './events/ping';
 import { prOpened } from './events/pr_opened';
+import { hasValidSignature } from './signature';
 
 const getLogger = (config: Config): PinoLambdaLogger =>
   pino({
@@ -58,6 +58,23 @@ export const handler = async (
 
   logger.debug('Received event: %o', event);
 
+  if (typeof config.GITHUB_WEBHOOK_SECRET !== 'undefined') {
+    logger.info('Verifying request signature');
+    const isValidSignature = await hasValidSignature(
+      config.GITHUB_WEBHOOK_SECRET,
+      event,
+    );
+    if (!isValidSignature) {
+      logger.warn('Request signature invalid');
+      return response(new Error('Invalid signature'));
+    }
+    logger.debug('Signature valid');
+  } else {
+    logger.debug(
+      'Signature verification is not enabled. This is not recommended.',
+    );
+  }
+
   if (event.httpMethod !== 'POST') {
     return response(new Error(`Unsupported method "${event.httpMethod}"`));
   }
@@ -65,42 +82,46 @@ export const handler = async (
   ok(event.headers['X-GitHub-Event']);
   const currentEventType = event.headers['X-GitHub-Event'] as WebhookEventName;
 
-  function parseBody<T extends Schema>(event: APIGatewayProxyEvent) {
-    ok(event.body);
-    logger.debug('event body: %o', event.body);
-    try {
-      return (JSON.parse(event.body) as unknown) as T;
-    } catch (e) {
-      throw new Error(`Could not parse event body: ${e.message}`);
-    }
+  ok(event.body, 'No event body');
+  let body: unknown;
+  try {
+    body = JSON.parse(event.body);
+    ok(body && typeof body === 'object', 'Event body is empty');
+  } catch (e) {
+    return response(new Error(`Could not parse event body: ${e.message}`));
   }
 
   try {
     switch (currentEventType) {
       case 'pull_request': {
-        const eventBody = parseBody<WebhookEventMap[typeof currentEventType]>(
-          event,
-        );
         return response(
           null,
-          await prOpened(eventBody, logger, config, octokit),
+          await prOpened(
+            body as WebhookEventMap[typeof currentEventType],
+            logger,
+            config,
+            octokit,
+          ),
         );
       }
       case 'issue_comment':
       case 'pull_request_review_comment': {
-        const eventBody = parseBody<WebhookEventMap[typeof currentEventType]>(
-          event,
-        );
         return response(
           null,
-          await commented(eventBody, currentEventType, logger, config, octokit),
+          await commented(
+            body as WebhookEventMap[typeof currentEventType],
+            currentEventType,
+            logger,
+            config,
+            octokit,
+          ),
         );
       }
       case 'ping': {
-        const eventBody = parseBody<WebhookEventMap[typeof currentEventType]>(
-          event,
+        return response(
+          null,
+          ping(body as WebhookEventMap[typeof currentEventType]),
         );
-        return response(null, ping(eventBody));
       }
       default:
         throw new Error(`Unsupported event type "${currentEventType}"`);
