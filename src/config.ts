@@ -1,15 +1,16 @@
-import { ok } from 'assert';
 import { z } from 'zod';
 import { SecretsManager } from 'aws-sdk';
 import memoizeOne from 'memoize-one';
 
 const SECRETSMANAGER_CONFIG_KEY = 'SECRETSMANAGER_CONFIG_KEY';
+export const GITHUB_WEBHOOK_SECRET_KEY = 'GITHUB_WEBHOOK_SECRET';
 
 const BaseConfig = z.object({
   /** needs: read_builds, write_builds, read_pipelines */
   BUILDKITE_TOKEN: z.string(),
   BUILDKITE_ORG_NAME: z.string(),
   ENABLE_DEBUG: z.string().optional(),
+  [GITHUB_WEBHOOK_SECRET_KEY]: z.string().optional(),
 });
 
 export const Config = z.union([
@@ -26,20 +27,25 @@ export const Config = z.union([
 
 export type Config = z.infer<typeof Config>;
 
-export const getConfig = memoizeOne(async function (
+const getSecretValue = memoizeOne(async (SecretId: string) => {
+  const client = new SecretsManager();
+
+  const value = await client.getSecretValue({ SecretId }).promise();
+  return Config.parse(JSON.parse(value.SecretString ?? ''));
+});
+
+export const getConfig = async function (
   env: NodeJS.ProcessEnv,
 ): Promise<Config> {
   const secretsManagerKey = env[SECRETSMANAGER_CONFIG_KEY];
   if (secretsManagerKey) {
     // if we have a secretsmanager config key, we use that to load the config
-    ok(secretsManagerKey);
-    const client = new SecretsManager();
-
-    const value = await client
-      .getSecretValue({ SecretId: secretsManagerKey })
-      .promise();
-    return Config.parse(JSON.parse(value.SecretString ?? ''));
+    const config = await getSecretValue(secretsManagerKey);
+    // Fall back to env var for `GITHUB_WEBHOOK_SECRET`
+    config.GITHUB_WEBHOOK_SECRET =
+      config.GITHUB_WEBHOOK_SECRET ?? process.env[GITHUB_WEBHOOK_SECRET_KEY];
+    return config;
   } else {
     return Config.parse(env);
   }
-});
+};

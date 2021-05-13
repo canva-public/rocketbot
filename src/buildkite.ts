@@ -36,6 +36,11 @@ export async function buildkiteReadPipelines(
   return pipelines;
 }
 
+export type Author = {
+  name: string;
+  email: string;
+};
+
 /**
  * Incomplete type descriptor for the response
  * of https://buildkite.com/docs/apis/rest-api/pipelines
@@ -61,11 +66,9 @@ export type Pipeline = {
   provider: object;
   builds_url: string;
   badge_url: string;
-  created_by: {
+  created_by: Author & {
     id: string;
     graphql_id: string;
-    name: string;
-    email: string;
     avatar_url: string;
     created_at: string;
   };
@@ -96,6 +99,15 @@ type Step = {
   parallelism: null | unknown;
 };
 
+export type BuildkiteBuildRequest = {
+  commit?: string;
+  branch?: string;
+  message?: string;
+  ignore_pipeline_branch_filters?: boolean;
+  author?: Partial<Author>;
+  env?: Dict<string>;
+};
+
 /**
  * Starts one or more buildkite builds
  */
@@ -114,7 +126,7 @@ export async function buildkiteStartBuild(
 ): Promise<Build[]> {
   const branch = prData.head.ref;
   const commit = prData.head.sha;
-  const requestBody = {
+  const requestBody: BuildkiteBuildRequest = {
     commit,
     branch,
     message: `On-demand build for branch "${branch}" requested by @${requester} from PR #${prData.number}`,
@@ -128,10 +140,10 @@ export async function buildkiteStartBuild(
       BUILDKITE_PULL_REQUEST: String(prData.number),
       BUILDKITE_PULL_REQUEST_BASE_BRANCH: prData.base.ref,
       BUILDKITE_PULL_REQUEST_REPO: prData.base.repo.ssh_url,
-      GH_CONTROL_BUILD: true,
+      GH_CONTROL_BUILD: 'true',
       GH_CONTROL_GITHUB_USER: requester,
-      GH_CONTROL_GITHUB_USER_EMAIL: senderEmail,
-      GH_CONTROL_GITHUB_USER_NAME: senderName,
+      GH_CONTROL_GITHUB_USER_EMAIL: senderEmail || '',
+      GH_CONTROL_GITHUB_USER_NAME: senderName || '',
       GH_CONTROL_GITHUB_TRIGGER_COMMENT_URL: commentUrl,
       GH_CONTROL_PR_NUMBER: String(prData.number),
       GH_CONTROL_PR_TITLE: prData.title,

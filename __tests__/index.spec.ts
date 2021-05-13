@@ -3,19 +3,30 @@ process.env.BUILDKITE_ORG_NAME = process.env.BUILDKITE_ORG_NAME || 'some-org';
 process.env.GITHUB_TOKEN = process.env.GITHUB_TOKEN || '__gh-token';
 process.env.ENABLE_DEBUG = process.env.ENABLE_DEBUG || 'false';
 
-import type { APIGatewayProxyResult, Context } from 'aws-lambda';
+import type {
+  APIGatewayProxyEvent,
+  APIGatewayProxyResult,
+  Context,
+} from 'aws-lambda';
 import { isTriggerComment, parseTriggerComment } from '../src/trigger';
 import type { JSONResponse } from '../src/response';
 import { handler } from '../src/index';
 import { join } from 'path';
+import { GITHUB_WEBHOOK_SECRET_KEY } from '../src/config';
+import { sign } from '@octokit/webhooks-methods';
+import { ok } from 'assert';
+import { readFileSync } from 'fs';
+import { BuildkiteBuildRequest } from '../src/buildkite';
 import nock from 'nock';
 
 // Enable this to record HTTP requests when adding a new test
 // nock.recorder.rec();
 
-function loadFixture(fixturePath: string) {
-  // eslint-disable-next-line global-require
-  return require(join(__dirname, 'fixtures', fixturePath));
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function loadFixture<T = any>(fixturePath: string): T {
+  return JSON.parse(
+    readFileSync(join(__dirname, 'fixtures', `${fixturePath}.json`), 'utf8'),
+  );
 }
 
 function assertLambdaResponse(
@@ -307,7 +318,9 @@ describe('github-control', () => {
 
     it('should ignore anything that is not a POST', async () => {
       expect.hasAssertions();
-      const lambdaRequest = loadFixture('lambda_request_GET');
+      const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+        'lambda_request_GET',
+      );
       const res = await handler(lambdaRequest, context);
       assertLambdaResponse(res, 400, {
         error: 'Unsupported method "GET"',
@@ -316,7 +329,9 @@ describe('github-control', () => {
 
     it('should ignore unsupported github events', async () => {
       expect.hasAssertions();
-      const lambdaRequest = loadFixture('commit_comment/lambda_request');
+      const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+        'commit_comment/lambda_request',
+      );
       const res = await handler(lambdaRequest, context);
       assertLambdaResponse(res, 400, {
         error: 'Unsupported event type "commit_comment"',
@@ -325,7 +340,10 @@ describe('github-control', () => {
 
     it('should gracefully handle non-JSON requests', async () => {
       expect.hasAssertions();
-      const lambdaRequest = loadFixture('lambda_request_no_JSON');
+      const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+        'lambda_request_no_JSON',
+      );
+      ok(lambdaRequest.body);
       try {
         JSON.parse(lambdaRequest.body);
       } catch (e) {
@@ -339,7 +357,9 @@ describe('github-control', () => {
 
     it('should gracefully handle a failing buildkite request', async () => {
       expect.hasAssertions();
-      const lambdaRequest = loadFixture('pull_request/lambda_request');
+      const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+        'pull_request/lambda_request',
+      );
 
       nock('https://api.buildkite.com')
         .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
@@ -354,7 +374,9 @@ describe('github-control', () => {
 
     it('should gracefully handle a failing github request', async () => {
       expect.hasAssertions();
-      const lambdaRequest = loadFixture('pull_request/lambda_request');
+      const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+        'pull_request/lambda_request',
+      );
       const pipelinesReply = loadFixture('pull_request/buildkite/pipelines');
 
       nock('https://api.buildkite.com:443')
@@ -381,7 +403,9 @@ describe('github-control', () => {
 
     it('should gracefully handle non-JSON responses', async () => {
       expect.hasAssertions();
-      const lambdaRequest = loadFixture('pull_request/lambda_request');
+      const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+        'pull_request/lambda_request',
+      );
 
       nock('https://api.buildkite.com:443')
         .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
@@ -399,7 +423,7 @@ describe('github-control', () => {
 
     it('should gracefully handle broken JSON responses', async () => {
       expect.hasAssertions();
-      const lambdaRequest = loadFixture(
+      const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
         'pull_request_review_comment/lambda_request',
       );
 
@@ -422,7 +446,9 @@ describe('github-control', () => {
     describe('ping', () => {
       it('should properly handle a ping', async () => {
         expect.hasAssertions();
-        const lambdaRequest = loadFixture('ping/lambda_request');
+        const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+          'ping/lambda_request',
+        );
         const res = await handler(lambdaRequest, context);
         assertLambdaResponse(res, 200, {
           commented: false,
@@ -435,7 +461,9 @@ describe('github-control', () => {
 
       it('should complain if the events set up are not enough', async () => {
         expect.hasAssertions();
-        const lambdaRequest = loadFixture('ping/lambda_request_no_events');
+        const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+          'ping/lambda_request_no_events',
+        );
         const res = await handler(lambdaRequest, context);
         assertLambdaResponse(res, 400, {
           error: 'Configure at least the delivery of issue comments',
@@ -447,7 +475,9 @@ describe('github-control', () => {
     describe('pull_request', () => {
       it('should ignore when pull requests change state except when they are opened', async () => {
         expect.hasAssertions();
-        const lambdaRequest = loadFixture('pull_request/lambda_pr_assigned');
+        const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+          'pull_request/lambda_pr_assigned',
+        );
         const res = await handler(lambdaRequest, context);
         assertLambdaResponse(res, 200, {
           success: true,
@@ -458,7 +488,9 @@ describe('github-control', () => {
 
       it('should not post a comment to github about the usage when no pipelines match', async () => {
         expect.hasAssertions();
-        const lambdaRequest = loadFixture('pull_request/lambda_request');
+        const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+          'pull_request/lambda_request',
+        );
         const pipelinesReply = loadFixture(
           'pull_request/buildkite/no_matching_pipelines',
         );
@@ -478,14 +510,18 @@ describe('github-control', () => {
 
       it('should post a comment to github about the usage when a pull request is opened', async () => {
         expect.hasAssertions();
-        const lambdaRequest = loadFixture('pull_request/lambda_request');
+        const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+          'pull_request/lambda_request',
+        );
         const pipelinesReply = loadFixture('pull_request/buildkite/pipelines');
         const createdCommentReply = loadFixture(
           'pull_request/github/comment_create',
         );
-        const expectedCommentCreationBody = loadFixture(
-          'pull_request/github/comment_create_body_expected',
-        );
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const expectedCommentCreationBody = require(join(
+          __dirname,
+          './fixtures/pull_request/github/comment_create_body_expected',
+        ));
         const docSomePipelineLite = loadFixture(
           'pull_request/github/doc_some_pipeline_lite',
         );
@@ -522,7 +558,9 @@ describe('github-control', () => {
 
       it('should page when there are more pages', async () => {
         expect.hasAssertions();
-        const lambdaRequest = loadFixture('pull_request/lambda_request');
+        const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+          'pull_request/lambda_request',
+        );
         const pipelinesReply = loadFixture('pull_request/buildkite/pipelines');
         const pipelinesReplyPage2 = loadFixture(
           'pull_request/buildkite/pipelines_page2',
@@ -548,7 +586,9 @@ describe('github-control', () => {
     describe('issue_comment', () => {
       it('should start a build when an issue comment requests it', async () => {
         expect.hasAssertions();
-        const lambdaRequest = loadFixture('issue_comment/lambda_request');
+        const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+          'issue_comment/lambda_request',
+        );
         const usersReply = loadFixture('github/users_some-user');
         const pullRequestReply = loadFixture(
           'issue_comment/github/pull_request',
@@ -556,9 +596,10 @@ describe('github-control', () => {
         const buildkiteCreateBuildReply = loadFixture(
           'issue_comment/buildkite/create_build',
         );
-        const expectedBuildkiteCreateBody = loadFixture(
+        const expectedBuildkiteCreateBody = loadFixture<BuildkiteBuildRequest>(
           'issue_comment/buildkite/create_build_body_expected',
         );
+
         const updateCommentReply = loadFixture(
           'issue_comment/github/update_comment',
         );
@@ -614,7 +655,7 @@ describe('github-control', () => {
         const buildkiteCreateBuildReplyOther = loadFixture(
           'issue_comment/buildkite/create_build_other',
         );
-        const expectedBuildkiteCreateBody = loadFixture(
+        const expectedBuildkiteCreateBody = loadFixture<BuildkiteBuildRequest>(
           'issue_comment/buildkite/create_build_body_expected',
         );
         const updateCommentReply = loadFixture(
@@ -666,7 +707,7 @@ describe('github-control', () => {
 
       it('should start a build with environment variables when an issue comment requests it', async () => {
         expect.hasAssertions();
-        const lambdaRequest = loadFixture(
+        const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
           'issue_comment/lambda_request_with_ENV',
         );
         const usersReply = loadFixture('github/users_some-user');
@@ -676,7 +717,7 @@ describe('github-control', () => {
         const buildkiteCreateBuildReply = loadFixture(
           'issue_comment/buildkite/create_build',
         );
-        const expectedBuildkiteCreateBody = loadFixture(
+        const expectedBuildkiteCreateBody = loadFixture<BuildkiteBuildRequest>(
           'issue_comment/buildkite/create_build_body_expected_with_ENV',
         );
         const updateCommentReply = loadFixture(
@@ -721,7 +762,7 @@ describe('github-control', () => {
 
       it('should ignore deleted comments', async () => {
         expect.hasAssertions();
-        const lambdaRequest = loadFixture(
+        const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
           'issue_comment/lambda_request_comment_deleted',
         );
 
@@ -735,7 +776,9 @@ describe('github-control', () => {
 
       it('should ignore comments not attached to pull requests', async () => {
         expect.hasAssertions();
-        const lambdaRequest = loadFixture('issue_comment/lambda_request_no_pr');
+        const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+          'issue_comment/lambda_request_no_pr',
+        );
 
         const res = await handler(lambdaRequest, context);
         assertLambdaResponse(res, 200, {
@@ -749,14 +792,14 @@ describe('github-control', () => {
     describe('pull_request_review_comment', () => {
       it('should start a build when a pull request review comment requests it', async () => {
         expect.hasAssertions();
-        const lambdaRequest = loadFixture(
+        const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
           'pull_request_review_comment/lambda_request',
         );
         const usersReply = loadFixture('github/users_some-user');
         const buildkiteCreateBuildReply = loadFixture(
           'pull_request_review_comment/buildkite/create_build',
         );
-        const buildkiteCreateBuildExpectedBody = loadFixture(
+        const buildkiteCreateBuildExpectedBody = loadFixture<BuildkiteBuildRequest>(
           'pull_request_review_comment/buildkite/create_build_body_expected',
         );
         const updateCommentReply = loadFixture(
@@ -797,7 +840,7 @@ describe('github-control', () => {
 
       it('should ignore comments that do not contain a build marker', async () => {
         expect.hasAssertions();
-        const lambdaRequest = loadFixture(
+        const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
           'pull_request_review_comment/lambda_request_random_comment',
         );
 
@@ -807,6 +850,86 @@ describe('github-control', () => {
           triggered: false,
         });
         assertNockDone();
+      });
+
+      describe('signature verification', () => {
+        // eslint-disable-next-line jest/no-hooks
+        beforeEach(() => {
+          process.env[GITHUB_WEBHOOK_SECRET_KEY] =
+            process.env[GITHUB_WEBHOOK_SECRET_KEY] || 'xxx';
+        });
+
+        // eslint-disable-next-line jest/no-hooks
+        afterEach(() => {
+          delete process.env[GITHUB_WEBHOOK_SECRET_KEY];
+        });
+
+        it('fails on incorrect signatures', async () => {
+          expect.hasAssertions();
+          const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+            'issue_comment/lambda_request_no_pr',
+          );
+          lambdaRequest.headers['X-Hub-Signature-256'] = 'invalid';
+          lambdaRequest.headers['X-Hub-Signature'] = 'invalid';
+
+          const res = await handler(lambdaRequest, context);
+          assertLambdaResponse(res, 400, {
+            error: 'Invalid signature',
+          });
+          assertNockDone();
+        });
+
+        it('passes on correct signatures', async () => {
+          expect.hasAssertions();
+          const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+            'issue_comment/lambda_request_no_pr',
+          );
+
+          const secret = process.env[GITHUB_WEBHOOK_SECRET_KEY];
+          ok(secret);
+          ok(lambdaRequest.body);
+          lambdaRequest.headers['X-Hub-Signature-256'] = await sign(
+            {
+              secret,
+              algorithm: 'sha256',
+            },
+            lambdaRequest.body,
+          );
+          lambdaRequest.headers['X-Hub-Signature'] = await sign(
+            {
+              secret,
+              algorithm: 'sha1',
+            },
+            lambdaRequest.body,
+          );
+          const res = await handler(lambdaRequest, context);
+
+          assertLambdaResponse(res, 200, { success: true, triggered: false });
+          assertNockDone();
+        });
+
+        it('falls back to SHA1', async () => {
+          expect.hasAssertions();
+          const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+            'issue_comment/lambda_request_no_pr',
+          );
+
+          const secret = process.env[GITHUB_WEBHOOK_SECRET_KEY];
+          ok(secret);
+          ok(lambdaRequest.body);
+          delete lambdaRequest.headers['X-Hub-Signature-256'];
+          lambdaRequest.headers['X-Hub-Signature'] = await sign(
+            {
+              secret,
+              algorithm: 'sha1',
+            },
+            lambdaRequest.body,
+          );
+          const res = await handler(lambdaRequest, context);
+
+          assertLambdaResponse(res, 200, { success: true, triggered: false });
+          assertNockDone();
+        });
       });
     });
   });

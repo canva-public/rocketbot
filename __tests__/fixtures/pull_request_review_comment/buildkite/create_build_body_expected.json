@@ -8,7 +8,7 @@
     "BUILDKITE_PULL_REQUEST": "1111111",
     "BUILDKITE_PULL_REQUEST_BASE_BRANCH": "master",
     "BUILDKITE_PULL_REQUEST_REPO": "git@github.com:some-org/some-repo.git",
-    "GH_CONTROL_BUILD": true,
+    "GH_CONTROL_BUILD": "true",
     "GH_CONTROL_GITHUB_USER": "some-user",
     "GH_CONTROL_GITHUB_USER_EMAIL": "some-user@some-domain.com",
     "GH_CONTROL_GITHUB_USER_NAME": "Some User",

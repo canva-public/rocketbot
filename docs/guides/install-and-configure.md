@@ -42,7 +42,8 @@ The configuration data schema is:
 type Config = {
   BUILDKITE_TOKEN: string; // A REST API token with scopes: read_builds, write_builds, read_pipelines
   BUILDKITE_ORG_NAME: string; // (the URL part of `https://buildkite.com/<your-org>/`)
-  ENABLE_DEBUG: string; // defaults to "false"
+  ENABLE_DEBUG?: string; // defaults to "false"
+  GITHUB_WEBHOOK_SECRET?: string; // A webhook secret to verify the webhook request against
 } & (
   | {
       // RocketBot uses a GitHub app. Recommended.
@@ -65,7 +66,7 @@ You can either provide a key for AWS SecretsManager via a
 variable, which holds a JSON object satisfying the above schema (recommended):
 
 ```hcl
-"{\"GITHUB_APP_PRIVATE_KEY\":\"...\",\"GITHUB_APP_INSTALLATION_ID\":\"...\",\"GITHUB_APP_APP_ID\":\"...\",\"GITHUB_TOKEN\":\"...\",\"BUILDKITE_TOKEN\":\"...\",\"BUILDKITE_ORG_NAME\":\"...\",\"ENABLE_DEBUG\":\"false\"}"
+"{\"GITHUB_APP_PRIVATE_KEY\":\"...\",\"GITHUB_APP_INSTALLATION_ID\":\"...\",\"GITHUB_APP_APP_ID\":\"...\",\"GITHUB_TOKEN\":\"...\",\"BUILDKITE_TOKEN\":\"...\",\"BUILDKITE_ORG_NAME\":\"...\",\"ENABLE_DEBUG\":\"false\",\"GITHUB_WEBHOOK_SECRET\": \"...\"}"
 ```
 
 or you make the following environment variables available to your Lambda function:
@@ -86,6 +87,7 @@ or
 Optional:
 
 - `ENABLE_DEBUG` (if set to `true`, logging will be enabled)
+- `GITHUB_WEBHOOK_SECRET` (if set to a value the request signature will be verified; recommended)
 
 ### Order of preference
 
@@ -93,12 +95,12 @@ The order of preference in which the configuration is loaded and interpreted is 
 
 #### Where to fetch the config data from
 
-1. use the data from AWS SecretsManager under the given ket if the `SECRETSMANAGER_CONFIG_KEY` env var is populated with a value
-2. if not try to use env vars
-3. fail if neither a secretsmanager key or a complete set of env vars is given
+1. use the data from AWS SecretsManager under the given ket if the `SECRETSMANAGER_CONFIG_KEY` env var is populated with a value; no fallback to environment variables except for `GITHUB_WEBHOOK_SECRET` if available
+2. Environment variables
+3. Dail if neither a secretsmanager key or a complete set of environment variables is given
 
 #### How the config data is read
 
-1. use a github app if `GITHUB_APP_APP_ID` is in the configuration object
-2. fall back to use `GITHUB_TOKEN` token if not
-3. fail if neither a full set of app credentials or a github token is given
+1. Use a github app if `GITHUB_APP_APP_ID` is in the configuration object
+2. Fall back to use `GITHUB_TOKEN` personal access token if not (not recommended)
+3. Fail if neither a full set of app credentials or `GITHUB_TOKEN` is given
