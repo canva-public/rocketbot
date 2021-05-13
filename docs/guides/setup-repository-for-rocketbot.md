@@ -6,6 +6,7 @@ To set up a repository to work with RocketBot:
 1. Under **Options**, click **Webhooks**, then click **Add webhook**.
 1. In **Payload URL**, enter the API gateway URL to where you deployed the RocketBot Lambda. For example, `https://xxxx.execute-api.us-east-1.amazonaws.com/flavor/xxx`.
 1. In **Content type**, select **application/json**.
+1. (Optional, but recommended): In **Secret** enter the [webhook secret](https://docs.github.com/en/developers/webhooks-and-events/securing-your-webhooks) that you configured RocketBot with.
 1. Under **Which events would you like to trigger this webhook?**, select **Let me select individual events**, then select:
    - **Issue comment**
    - **Pull request**
