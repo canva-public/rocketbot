@@ -18,10 +18,8 @@ import type { JSONResponse } from '../response';
 import { GithubApis } from '../github_apis';
 import { IssueComment, Mutation, Scalars, User } from '@octokit/graphql-schema';
 
-export type PullRequestData =
-  RestEndpointMethodTypes['pulls']['get']['response']['data'];
-export type UserData =
-  RestEndpointMethodTypes['users']['getByUsername']['response']['data'];
+export type PullRequestData = RestEndpointMethodTypes['pulls']['get']['response']['data'];
+export type UserData = RestEndpointMethodTypes['users']['getByUsername']['response']['data'];
 
 type PullRequestContext = PullRequestData | PullRequest;
 type Unpromisify<T> = T extends Promise<infer U> ? U : T;

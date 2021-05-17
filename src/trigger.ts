@@ -64,7 +64,9 @@ function parseEnvBlock(
 /**
  * Parses a markdown trigger comment into an object with the build information
  */
-export function parseTriggerComment(commentBody: string): {
+export function parseTriggerComment(
+  commentBody: string,
+): {
   buildNames: string[];
   env: NodeJS.ProcessEnv;
 } {

@@ -59,7 +59,7 @@ function assertNockDone() {
 }
 
 describe('github-control', () => {
-  const context = jest.fn<Context, never>() as unknown as Context;
+  const context = (jest.fn<Context, never>() as unknown) as Context;
   describe('general', () => {
     describe('comment matching', () => {
       it('should match a simple comment', () => {
@@ -323,8 +323,9 @@ describe('github-control', () => {
 
     it('should ignore anything that is not a POST', async () => {
       expect.hasAssertions();
-      const lambdaRequest =
-        loadFixture<APIGatewayProxyEvent>('lambda_request_GET');
+      const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+        'lambda_request_GET',
+      );
       const res = await handler(lambdaRequest, context);
       assertLambdaResponse(res, 400, {
         error: 'Unsupported method "GET"',
@@ -573,11 +574,13 @@ describe('github-control', () => {
         nock('https://api.buildkite.com')
           .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
           .reply(200, pipelinesReply, {
-            link: '<https://api.buildkite.com/v2/organizations/some-org/pipelines?page=2&per_page=100>; rel="next", <https://api.buildkite.com/v2/organizations/some-org/pipelines?page=2&per_page=100>; rel="last"',
+            link:
+              '<https://api.buildkite.com/v2/organizations/some-org/pipelines?page=2&per_page=100>; rel="next", <https://api.buildkite.com/v2/organizations/some-org/pipelines?page=2&per_page=100>; rel="last"',
           })
           .get('/v2/organizations/some-org/pipelines?page=2&per_page=100')
           .reply(200, pipelinesReplyPage2, {
-            link: '<https://api.buildkite.com/v2/organizations/some-org/pipelines?page=1&per_page=100>; rel="prev", <https://api.buildkite.com/v2/organizations/some-org/pipelines?page=1&per_page=100>; rel="first"',
+            link:
+              '<https://api.buildkite.com/v2/organizations/some-org/pipelines?page=1&per_page=100>; rel="prev", <https://api.buildkite.com/v2/organizations/some-org/pipelines?page=1&per_page=100>; rel="first"',
           });
 
         await handler(lambdaRequest, context);
@@ -882,10 +885,9 @@ describe('github-control', () => {
         const buildkiteCreateBuildReply = loadFixture(
           'pull_request_review_comment/buildkite/create_build',
         );
-        const buildkiteCreateBuildExpectedBody =
-          loadFixture<BuildkiteBuildRequest>(
-            'pull_request_review_comment/buildkite/create_build_body_expected',
-          );
+        const buildkiteCreateBuildExpectedBody = loadFixture<BuildkiteBuildRequest>(
+          'pull_request_review_comment/buildkite/create_build_body_expected',
+        );
         const updateCommentReply = loadFixture(
           'pull_request_review_comment/github/update_comment',
         );

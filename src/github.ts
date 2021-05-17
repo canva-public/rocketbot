@@ -9,12 +9,9 @@ import { Octokit } from '@octokit/rest';
 import type { RestEndpointMethodTypes } from '@octokit/rest';
 import type { Logger } from 'pino';
 
-type PullRequestData =
-  RestEndpointMethodTypes['pulls']['get']['response']['data'];
-type IssueCommentData =
-  RestEndpointMethodTypes['issues']['updateComment']['response']['data'];
-type PullRequestReviewCommentData =
-  RestEndpointMethodTypes['pulls']['updateReviewComment']['response']['data'];
+type PullRequestData = RestEndpointMethodTypes['pulls']['get']['response']['data'];
+type IssueCommentData = RestEndpointMethodTypes['issues']['updateComment']['response']['data'];
+type PullRequestReviewCommentData = RestEndpointMethodTypes['pulls']['updateReviewComment']['response']['data'];
 
 /**
  * Retrieves details about a pull request

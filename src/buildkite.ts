@@ -6,8 +6,7 @@ import got from 'got';
 import memoizeOne from 'memoize-one';
 
 type Dict<T> = Record<string, T>;
-type PullRequestData =
-  RestEndpointMethodTypes['pulls']['get']['response']['data'];
+type PullRequestData = RestEndpointMethodTypes['pulls']['get']['response']['data'];
 
 const gotInstance = memoizeOne((config: Config) => {
   return got.extend({
