@@ -31,9 +31,7 @@ export async function buildkiteReadPipelines(
     paginate: { all },
   } = gotInstance(config);
 
-  const pipelines = await all<Pipeline>('pipelines?page=1&per_page=100');
-  logger.debug('All pipelines: %o', pipelines);
-  return pipelines;
+  return all<Pipeline>('pipelines?page=1&per_page=100');
 }
 
 export type Author = {

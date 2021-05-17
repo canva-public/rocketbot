@@ -66,7 +66,10 @@ function parseEnvBlock(
  */
 export function parseTriggerComment(
   commentBody: string,
-): { buildNames: string[]; env: NodeJS.ProcessEnv } {
+): {
+  buildNames: string[];
+  env: NodeJS.ProcessEnv;
+} {
   const match = commentBody.match(buildTriggerRegex);
   // TODO: ensure that matches are mapped properly - either with named captures and/or non-capturing groups
   const pipelinesBlock = match ? match[0] : '';

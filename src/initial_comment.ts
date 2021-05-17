@@ -2,7 +2,7 @@ import type { Logger } from 'pino';
 import type { Octokit } from '@octokit/rest';
 import type { PullRequest, Repository } from '@octokit/webhooks-types';
 import type { Pipeline } from './buildkite';
-import { isOctokitRequestError } from './octokit';
+import { isOctokitRequestError } from './github_apis';
 import type { RestEndpointMethodTypes } from '@octokit/rest';
 
 type Dict<T> = Record<string, T>;
