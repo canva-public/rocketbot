@@ -58,7 +58,10 @@ export const handler = async (
 
   logger.debug('Received event: %o', event);
 
-  if (typeof config.GITHUB_WEBHOOK_SECRET !== 'undefined') {
+  if (
+    typeof config.GITHUB_WEBHOOK_SECRET !== 'undefined' &&
+    config.GITHUB_WEBHOOK_SECRET !== ''
+  ) {
     logger.info('Verifying request signature');
     const isValidSignature = await hasValidSignature(
       config.GITHUB_WEBHOOK_SECRET,

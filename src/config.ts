@@ -48,7 +48,6 @@ export const getConfig = async function (
     return config;
   } else {
     const config = Config.parse(env);
-    config.GITHUB_WEBHOOK_SECRET = config.GITHUB_WEBHOOK_SECRET || undefined;
     return config;
   }
 };
