@@ -4,10 +4,10 @@ import { Config } from '../config';
 import { buildkiteReadPipelines, Pipeline } from '../buildkite';
 import { fetchDocumentationLinkMds } from '../initial_comment';
 import { githubAddComment } from '../github';
-import { Octokit } from '@octokit/rest';
 import sortBy from 'lodash.sortby';
 import { JSONResponse } from '../response';
 import gitUrlParse, { GitUrl } from 'git-url-parse';
+import { GithubApis } from '../github_apis';
 
 const validBranchBuildEnvVarMarker = 'GH_CONTROL_IS_VALID_BRANCH_BUILD';
 
@@ -35,7 +35,7 @@ export async function prOpened(
   eventBody: PullRequestEvent,
   logger: Logger,
   config: Config,
-  octokit: Octokit,
+  apis: GithubApis,
 ): Promise<JSONResponse> {
   if (eventBody.action !== 'opened') {
     logger.info('PR was not opened, nothing to do here');
@@ -62,6 +62,7 @@ export async function prOpened(
     };
   }
 
+  const { octokit } = apis;
   const links = await fetchDocumentationLinkMds(
     octokit,
     logger,

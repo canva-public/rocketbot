@@ -18,6 +18,11 @@ import { ok } from 'assert';
 import { readFileSync } from 'fs';
 import { BuildkiteBuildRequest } from '../src/buildkite';
 import nock from 'nock';
+import {
+  commentsReq,
+  CommentsRequestData,
+  mutationReq,
+} from '../src/events/commented';
 
 // Enable this to record HTTP requests when adding a new test
 // nock.recorder.rec();
@@ -54,7 +59,7 @@ function assertNockDone() {
 }
 
 describe('github-control', () => {
-  const context = (jest.fn<Context, never>() as unknown) as Context;
+  const context = jest.fn<Context, never>() as unknown as Context;
   describe('general', () => {
     describe('comment matching', () => {
       it('should match a simple comment', () => {
@@ -318,9 +323,8 @@ describe('github-control', () => {
 
     it('should ignore anything that is not a POST', async () => {
       expect.hasAssertions();
-      const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
-        'lambda_request_GET',
-      );
+      const lambdaRequest =
+        loadFixture<APIGatewayProxyEvent>('lambda_request_GET');
       const res = await handler(lambdaRequest, context);
       assertLambdaResponse(res, 400, {
         error: 'Unsupported method "GET"',
@@ -569,13 +573,11 @@ describe('github-control', () => {
         nock('https://api.buildkite.com')
           .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
           .reply(200, pipelinesReply, {
-            link:
-              '<https://api.buildkite.com/v2/organizations/some-org/pipelines?page=2&per_page=100>; rel="next", <https://api.buildkite.com/v2/organizations/some-org/pipelines?page=2&per_page=100>; rel="last"',
+            link: '<https://api.buildkite.com/v2/organizations/some-org/pipelines?page=2&per_page=100>; rel="next", <https://api.buildkite.com/v2/organizations/some-org/pipelines?page=2&per_page=100>; rel="last"',
           })
           .get('/v2/organizations/some-org/pipelines?page=2&per_page=100')
           .reply(200, pipelinesReplyPage2, {
-            link:
-              '<https://api.buildkite.com/v2/organizations/some-org/pipelines?page=1&per_page=100>; rel="prev", <https://api.buildkite.com/v2/organizations/some-org/pipelines?page=1&per_page=100>; rel="first"',
+            link: '<https://api.buildkite.com/v2/organizations/some-org/pipelines?page=1&per_page=100>; rel="prev", <https://api.buildkite.com/v2/organizations/some-org/pipelines?page=1&per_page=100>; rel="first"',
           });
 
         await handler(lambdaRequest, context);
@@ -628,6 +630,59 @@ describe('github-control', () => {
             expectedGithubUpdateCommentBody,
           )
           .reply(200, updateCommentReply);
+
+        const response: CommentsRequestData = {
+          self: { login: 'xx' },
+          comments: {
+            pullRequest: {
+              comments: {
+                nodes: [
+                  { id: 'A', viewerDidAuthor: true, isMinimized: true }, // minimized already, leave it alone
+                  { id: 'B', viewerDidAuthor: true, isMinimized: false },
+                  {
+                    id: 'C',
+                    viewerDidAuthor: false,
+                    isMinimized: false,
+                    editor: {
+                      login: 'xx',
+                    },
+                  },
+                  {
+                    id: 'D',
+                    viewerDidAuthor: false,
+                    isMinimized: false,
+                    editor: {
+                      login: 'xy', // different editor
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        };
+        nock('https://api.github.com')
+          .post('/graphql', {
+            query: commentsReq,
+            variables: {
+              repoName: 'some-repo',
+              repoOwner: 'some-org',
+              prNumber: 9500,
+            },
+          })
+          .reply(200, { data: response });
+
+        nock('https://api.github.com')
+          .post('/graphql', {
+            query: mutationReq,
+            variables: { subjectId: 'B' },
+          })
+          .reply(200, { data: { clientMutationId: null } });
+        nock('https://api.github.com')
+          .post('/graphql', {
+            query: mutationReq,
+            variables: { subjectId: 'C' },
+          })
+          .reply(200, { data: { clientMutationId: null } });
 
         const res = await handler(lambdaRequest, context);
         assertLambdaResponse(res, 200, {
@@ -694,6 +749,20 @@ describe('github-control', () => {
           )
           .reply(200, updateCommentReply);
 
+        const response: CommentsRequestData = {
+          self: { login: 'xx' },
+          comments: {
+            pullRequest: {
+              comments: {
+                nodes: [],
+              },
+            },
+          },
+        };
+        nock('https://api.github.com')
+          .post('/graphql')
+          .reply(200, { data: response });
+
         const res = await handler(lambdaRequestMultiBuild, context);
         assertLambdaResponse(res, 200, {
           success: true,
@@ -749,6 +818,20 @@ describe('github-control', () => {
           )
           .reply(200, updateCommentReply);
 
+        const response: CommentsRequestData = {
+          self: { login: 'xx' },
+          comments: {
+            pullRequest: {
+              comments: {
+                nodes: [],
+              },
+            },
+          },
+        };
+        nock('https://api.github.com')
+          .post('/graphql')
+          .reply(200, { data: response });
+
         const res = await handler(lambdaRequest, context);
         assertLambdaResponse(res, 200, {
           success: true,
@@ -799,9 +882,10 @@ describe('github-control', () => {
         const buildkiteCreateBuildReply = loadFixture(
           'pull_request_review_comment/buildkite/create_build',
         );
-        const buildkiteCreateBuildExpectedBody = loadFixture<BuildkiteBuildRequest>(
-          'pull_request_review_comment/buildkite/create_build_body_expected',
-        );
+        const buildkiteCreateBuildExpectedBody =
+          loadFixture<BuildkiteBuildRequest>(
+            'pull_request_review_comment/buildkite/create_build_body_expected',
+          );
         const updateCommentReply = loadFixture(
           'pull_request_review_comment/github/update_comment',
         );
@@ -826,6 +910,20 @@ describe('github-control', () => {
             expectedGuithubUpdateCommentBody,
           )
           .reply(200, updateCommentReply);
+
+        const response: CommentsRequestData = {
+          self: { login: 'xx' },
+          comments: {
+            pullRequest: {
+              comments: {
+                nodes: [],
+              },
+            },
+          },
+        };
+        nock('https://api.github.com')
+          .post('/graphql')
+          .reply(200, { data: response });
 
         const res = await handler(lambdaRequest, context);
         assertLambdaResponse(res, 200, {

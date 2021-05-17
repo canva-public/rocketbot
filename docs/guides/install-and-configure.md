@@ -44,6 +44,7 @@ type Config = {
   BUILDKITE_ORG_NAME: string; // (the URL part of `https://buildkite.com/<your-org>/`)
   ENABLE_DEBUG?: string; // defaults to "false"
   GITHUB_WEBHOOK_SECRET?: string; // A webhook secret to verify the webhook request against
+  COLLAPSE_OLD_COMMENTS?: string; // defaults to "true"; collapses old RocketBot comments when adding/editing new ones
 } & (
   | {
       // RocketBot uses a GitHub app. Recommended.

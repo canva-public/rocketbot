@@ -6,7 +6,8 @@ import got from 'got';
 import memoizeOne from 'memoize-one';
 
 type Dict<T> = Record<string, T>;
-type PullRequestData = RestEndpointMethodTypes['pulls']['get']['response']['data'];
+type PullRequestData =
+  RestEndpointMethodTypes['pulls']['get']['response']['data'];
 
 const gotInstance = memoizeOne((config: Config) => {
   return got.extend({
@@ -31,9 +32,7 @@ export async function buildkiteReadPipelines(
     paginate: { all },
   } = gotInstance(config);
 
-  const pipelines = await all<Pipeline>('pipelines?page=1&per_page=100');
-  logger.debug('All pipelines: %o', pipelines);
-  return pipelines;
+  return all<Pipeline>('pipelines?page=1&per_page=100');
 }
 
 export type Author = {

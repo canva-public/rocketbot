@@ -64,9 +64,10 @@ function parseEnvBlock(
 /**
  * Parses a markdown trigger comment into an object with the build information
  */
-export function parseTriggerComment(
-  commentBody: string,
-): { buildNames: string[]; env: NodeJS.ProcessEnv } {
+export function parseTriggerComment(commentBody: string): {
+  buildNames: string[];
+  env: NodeJS.ProcessEnv;
+} {
   const match = commentBody.match(buildTriggerRegex);
   // TODO: ensure that matches are mapped properly - either with named captures and/or non-capturing groups
   const pipelinesBlock = match ? match[0] : '';

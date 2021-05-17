@@ -11,6 +11,7 @@ const BaseConfig = z.object({
   BUILDKITE_ORG_NAME: z.string(),
   ENABLE_DEBUG: z.string().optional(),
   [GITHUB_WEBHOOK_SECRET_KEY]: z.string().optional(),
+  COLLAPSE_OLD_COMMENTS: z.string().optional().default('true'),
 });
 
 export const Config = z.union([
@@ -46,6 +47,8 @@ export const getConfig = async function (
       config.GITHUB_WEBHOOK_SECRET ?? process.env[GITHUB_WEBHOOK_SECRET_KEY];
     return config;
   } else {
-    return Config.parse(env);
+    const config = Config.parse(env);
+    config.GITHUB_WEBHOOK_SECRET = config.GITHUB_WEBHOOK_SECRET || undefined;
+    return config;
   }
 };
