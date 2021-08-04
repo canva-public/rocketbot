@@ -76,7 +76,26 @@ export async function prOpened(
     .map(({ slug, description: desc }) => {
       // TODO: proper markdown sanitization
       const description = (desc?.trim() ?? '').trim().replace(/\|/g, '\\|');
-      return `| \`:rocket:[${slug}]\` | ${description} | ${links[slug]} |`;
+      // We need raw HTML tables to be able to insert a code block to enable Github's copy button
+      return `<tr>
+<td>
+
+\`\`\`
+:rocket:[${slug}]
+\`\`\`
+
+</td>
+<td>
+
+${description}
+
+</td>
+<td>
+
+${links[slug]}
+
+</td>
+</tr>`;
     })
     .join('\n');
   const commentData = await githubAddComment(
@@ -91,9 +110,18 @@ export async function prOpened(
 
 By commenting on this PR with: \`:rocket:[<pipeline>]\`, e.g.
 
-| Comment | Description | More info |
-| --- | --- | --- |
+<table>
+<thead>
+<tr>
+<th>Comment</th>
+<th>Description</th>
+<th>More info</th>
+</tr>
+</thead>
+<tbody>
 ${pipelineList}
+</tbody>
+</table>
 
 _Note: you can pass [custom environment variables](https://github.com/canva-public/rocketbot/blob/main/docs/guides/pass-in-variables.md) to some builds._
 
