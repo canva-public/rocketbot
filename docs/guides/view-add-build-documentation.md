@@ -2,7 +2,7 @@
 
 In this guide you'll learn how to view or add documentation for the RocketBot builds for your PR.
 
-When you create a PR, the RcoketBot GitHub user leaves an **Almost merged!** comment on your PR.
+When you create a PR, the RocketBot GitHub user leaves an **Almost merged!** comment on your PR.
 
 ![almost-merged](../images/almost-merged.png)
 
