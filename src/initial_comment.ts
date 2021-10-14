@@ -56,12 +56,12 @@ export async function fetchDocumentationLinkMds(
   return pipelines.reduce<Dict<string>>((acc, pipeline) => {
     const documentationUrl = documentationUrls[pipeline.slug];
     acc[pipeline.slug] = documentationUrl
-      ? `[:information_source:](${documentationUrl} "See more information")`
-      : `[:heavy_plus_sign:](${getDocumentationCreationLink(
+      ? `[See more information](${documentationUrl})`
+      : `[Add more information](${getDocumentationCreationLink(
           prData,
           orgSlug,
           pipeline,
-        )} "Add more information")`;
+        )})`;
     return acc;
   }, {});
 }
