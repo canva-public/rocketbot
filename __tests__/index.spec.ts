@@ -561,6 +561,56 @@ describe('github-control', () => {
         assertNockDone();
       });
 
+      it('should post a comment with a suggested section to github about the usage when a pull request is opened', async () => {
+        expect.hasAssertions();
+        const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+          'pull_request/lambda_request',
+        );
+        const pipelinesReply = loadFixture(
+          'pull_request/buildkite/pipelines_suggested',
+        );
+        const createdCommentReply = loadFixture(
+          'pull_request/github/comment_create_with_suggested',
+        );
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const expectedCommentCreationBody = require(join(
+          __dirname,
+          './fixtures/pull_request/github/comment_create_body_with_suggested_expected',
+        ));
+        const docSomePipelineLite = loadFixture(
+          'pull_request/github/doc_some_pipeline_lite',
+        );
+
+        nock('https://api.buildkite.com:443')
+          .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
+          .reply(200, pipelinesReply);
+
+        nock('https://api.github.com')
+          .post(
+            '/repos/some-org/some-repo/issues/1111111/comments',
+            expectedCommentCreationBody,
+          )
+          .reply(201, createdCommentReply);
+
+        nock('https://api.github.com')
+          .get(
+            `/repos/some-org/some-repo/contents/${encodeURIComponent(
+              '.buildkite/pipeline/description/some-org',
+            )}` + '?ref=c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ffe',
+          )
+          .reply(200, docSomePipelineLite);
+
+        const res = await handler(lambdaRequest, context);
+        assertLambdaResponse(res, 200, {
+          success: true,
+          triggered: false,
+          commented: true,
+          commentUrl:
+            'https://github.com/some-org/some-repo/pull/1111111#issuecomment-280987786',
+        });
+        assertNockDone();
+      });
+
       it('should page when there are more pages', async () => {
         expect.hasAssertions();
         const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
