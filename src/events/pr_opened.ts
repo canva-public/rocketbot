@@ -10,6 +10,7 @@ import gitUrlParse, { GitUrl } from 'git-url-parse';
 import { GithubApis } from '../github_apis';
 
 const validBranchBuildEnvVarMarker = 'GH_CONTROL_IS_VALID_BRANCH_BUILD';
+const suggestedPipelineEnvMarker = 'GH_CONTROL_SUGGESTED_PIPELINE';
 
 export function isMarkedPipeline(
   eventGitUrl: GitUrl,
@@ -47,8 +48,9 @@ export async function prOpened(
   logger.info('PR was opened');
   const pipelineData = await buildkiteReadPipelines(logger, config);
 
-  const pipelines = pipelineData.filter(
-    isMarkedPipeline.bind(null, eventGitUrl),
+  const pipelines = sortBy(
+    pipelineData.filter(isMarkedPipeline.bind(null, eventGitUrl)),
+    ['slug'],
   );
 
   if (!pipelines.length) {
@@ -72,24 +74,43 @@ export async function prOpened(
     pipelines,
   );
 
-  const pipelineList = sortBy(pipelines, ['slug'])
-    .map(({ slug, description: desc }) => {
-      // TODO: proper markdown sanitization
-      const description = (desc?.trim() ?? '').trim().replace(/\|/g, '\\|');
-      // We need raw HTML tables to be able to insert a code block to enable Github's copy button
-      return `
+  const suggestedPipelinesContent: string[] = [];
+  const otherPipelinesContent: string[] = [];
+  pipelines.forEach(({ slug, description: desc, env }) => {
+    // TODO: proper markdown sanitization
+    const description = (desc?.trim() ?? '').trim().replace(/\|/g, '\\|');
+    const mdContent = `
 <details>
-  <summary>${description || slug}</summary>
+<summary>${slug}</summary>
 
-  \`\`\`
-  :rocket:[${slug}]
-  \`\`\`
-  
-  ${links[slug]}
+${description}
+\`\`\`
+:rocket:[${slug}]
+\`\`\`
+
+${links[slug]}
 
 </details>`;
-    })
-    .join('\n');
+
+    if (suggestedPipelineEnvMarker in (env || {})) {
+      suggestedPipelinesContent.push(mdContent);
+    } else {
+      otherPipelinesContent.push(mdContent);
+    }
+  });
+  const pipelineList =
+    suggestedPipelinesContent.length > 0
+      ? `
+Suggested pipelines
+${suggestedPipelinesContent.join('\n')}
+
+Other pipelines
+${otherPipelinesContent.join('\n')}
+  `
+      : `
+${otherPipelinesContent.join('\n')}
+  `;
+
   const commentData = await githubAddComment(
     octokit,
     logger,
