@@ -1,0 +1,28 @@
+{
+  "url": "https://api.github.com/repos/some-org/some-repo/issues/comments/1111111",
+  "html_url": "https://github.com/some-org/some-repo/pull/1111111#issuecomment-280987786",
+  "issue_url": "https://api.github.com/repos/some-org/some-repo/issues/1111111",
+  "id": 280987786,
+  "user": {
+    "login": "some-user",
+    "id": 11111111,
+    "avatar_url": "https://avatars.githubusercontent.com/u/11111111?v=3",
+    "gravatar_id": "",
+    "url": "https://api.github.com/users/some-user",
+    "html_url": "https://github.com/some-user",
+    "followers_url": "https://api.github.com/users/some-user/followers",
+    "following_url": "https://api.github.com/users/some-user/following{/other_user}",
+    "gists_url": "https://api.github.com/users/some-user/gists{/gist_id}",
+    "starred_url": "https://api.github.com/users/some-user/starred{/owner}{/repo}",
+    "subscriptions_url": "https://api.github.com/users/some-user/subscriptions",
+    "organizations_url": "https://api.github.com/users/some-user/orgs",
+    "repos_url": "https://api.github.com/users/some-user/repos",
+    "events_url": "https://api.github.com/users/some-user/events{/privacy}",
+    "received_events_url": "https://api.github.com/users/some-user/received_events",
+    "type": "User",
+    "site_admin": false
+  },
+  "created_at": "2017-02-20T04:53:38Z",
+  "updated_at": "2017-02-20T04:53:38Z",
+  "body": "Your last comment looked similar to a command but Rocketbot couldn't understand it. Were you trying to trigger build?"
+}

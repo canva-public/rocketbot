@@ -890,6 +890,36 @@ describe('github-control', () => {
         });
         assertNockDone();
       });
+
+      it('should post a warning if the comment looks similar to a command', async () => {
+        expect.hasAssertions();
+        const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+          'issue_comment/lambda_request_match_preamble',
+        );
+        const createCommentReply = loadFixture(
+          'issue_comment/github/create_comment_warning',
+        );
+        const expectedGithubCreateCommentBody = loadFixture(
+          'issue_comment/github/create_comment_body_expected_warning',
+        );
+
+        nock('https://api.github.com')
+          .post(
+            '/repos/some-org/some-repo/issues/9500/comments',
+            expectedGithubCreateCommentBody,
+          )
+          .reply(200, createCommentReply);
+
+        const res = await handler(lambdaRequest, context);
+        assertLambdaResponse(res, 200, {
+          success: true,
+          triggered: false,
+          commented: true,
+          commentUrl:
+            'https://github.com/some-org/some-repo/pull/1111111#issuecomment-280987786',
+        });
+        assertNockDone();
+      });
     });
 
     describe('pull_request_review_comment', () => {

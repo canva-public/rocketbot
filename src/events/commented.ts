@@ -65,7 +65,7 @@ export async function commented(
   }
   if (!isTriggerComment(eventBody.comment.body)) {
     if (hasPreamble(eventBody.comment.body)) {
-      await githubAddComment(
+      const commentData = await githubAddComment(
         octokit,
         logger,
         eventBody.repository,
@@ -77,10 +77,16 @@ export async function commented(
       logger.info(
         'Contains preamble but did not qualify as a trigger. Warned the user',
       );
+      return {
+        success: true,
+        triggered: false,
+        commented: true,
+        commentUrl: commentData.html_url,
+      };
     } else {
       logger.info('Not a comment to trigger a build run, nothing to do here');
+      return { success: true, triggered: false };
     }
-    return { success: true, triggered: false };
   }
 
   const pr = isIssueComment(currentEventType, eventBody)
