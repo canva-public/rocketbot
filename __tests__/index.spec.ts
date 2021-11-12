@@ -920,6 +920,20 @@ describe('github-control', () => {
         });
         assertNockDone();
       });
+
+      it('should not post a warning if the comment has a rocket emoji', async () => {
+        expect.hasAssertions();
+        const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+          'issue_comment/lambda_request_has_emoji',
+        );
+
+        const res = await handler(lambdaRequest, context);
+        assertLambdaResponse(res, 200, {
+          success: true,
+          triggered: false,
+        });
+        assertNockDone();
+      });
     });
 
     describe('pull_request_review_comment', () => {
