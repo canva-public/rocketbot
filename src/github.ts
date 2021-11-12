@@ -1,6 +1,5 @@
 import type {
   IssueCommentEvent,
-  PullRequest,
   Repository,
   WebhookEvent,
   WebhookEventName,
@@ -37,21 +36,17 @@ export async function githubAddComment(
   octokit: Octokit,
   logger: Logger,
   repository: Repository,
-  pullRequest: PullRequest,
+  issueNumber: number,
   body: string,
 ): Promise<
   RestEndpointMethodTypes['issues']['createComment']['response']['data']
 > {
-  logger.debug(
-    'adding comment to %s#%s',
-    repository.full_name,
-    pullRequest.number,
-  );
+  logger.debug('adding comment to %s#%s', repository.full_name, issueNumber);
   return (
     await octokit.issues.createComment({
       owner: repository.owner.login,
       repo: repository.name,
-      issue_number: pullRequest.number,
+      issue_number: issueNumber,
       body,
     })
   ).data;

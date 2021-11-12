@@ -27,6 +27,15 @@ export function isTriggerComment(commentBody: string): boolean {
 }
 
 /**
+ * Determines whether a given comment contains the preamble
+ * @param commentBody
+ * @return {boolean}
+ */
+export function hasPreamble(commentBody: string): boolean {
+  return new RegExp(`^${preamblePattern}`).test(commentBody);
+}
+
+/**
  * Transforms an env variable block into an object
  *
  * A=a
