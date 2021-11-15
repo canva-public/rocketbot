@@ -18,12 +18,12 @@ const buildTriggerRegex = new RegExp(
 );
 
 /**
- * Determines whether a given comment contains the preamble
+ * Determines whether a given comment is a valid trigger comment to kick off a new custom build
  * @param commentBody
  * @return {boolean}
  */
-export function hasPreamble(commentBody: string): boolean {
-  return new RegExp(`^${preamblePattern}`).test(commentBody);
+export function isTriggerComment(commentBody: string): boolean {
+  return buildTriggerRegex.test(commentBody);
 }
 
 /**
