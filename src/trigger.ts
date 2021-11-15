@@ -18,15 +18,6 @@ const buildTriggerRegex = new RegExp(
 );
 
 /**
- * Determines whether a given comment is a valid trigger comment to kick off a new custom build
- * @param commentBody
- * @return {boolean}
- */
-export function isTriggerComment(commentBody: string): boolean {
-  return buildTriggerRegex.test(commentBody);
-}
-
-/**
  * Determines whether a given comment contains the preamble
  * @param commentBody
  * @return {boolean}
