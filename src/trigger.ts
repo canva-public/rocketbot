@@ -12,7 +12,7 @@ const preamblePattern = '\\s*>?\\s*`?\\s*(?:🚀|:rocket:)';
 const pipelineNameRegex = /([\w-]+)/g;
 const pipelineNamesPattern = '(?:\\s*\\[\\s*[\\w-]+\\s*\\])+\\s*`?';
 const rocketPattern = `${preamblePattern}(${pipelineNamesPattern})`;
-const envSectionPattern = '(?:```(?:ini)?\\s*((?:.|\\s)+?)\\s*```\\s*)?';
+const envSectionPattern = '(?:```(?:ini)?\\s*((?:.|\\s)+?)\\s*(?:```)?\\s*)?';
 const buildTriggerRegex = new RegExp(
   `^(${rocketPattern}\\s*)+\\s*${envSectionPattern}$`,
 );
@@ -24,6 +24,15 @@ const buildTriggerRegex = new RegExp(
  */
 export function isTriggerComment(commentBody: string): boolean {
   return buildTriggerRegex.test(commentBody);
+}
+
+/**
+ * Determines whether a given comment contains the preamble
+ * @param commentBody
+ * @return {boolean}
+ */
+export function hasPreamble(commentBody: string): boolean {
+  return new RegExp(`^${preamblePattern}`).test(commentBody);
 }
 
 /**
