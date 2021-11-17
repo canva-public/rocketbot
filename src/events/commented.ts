@@ -72,7 +72,7 @@ export async function commented(
         isIssueComment(currentEventType, eventBody)
           ? eventBody.issue.number
           : eventBody.pull_request.number,
-        "Your last comment looked similar to a command but Rocketbot couldn't understand it. Were you trying to trigger build?",
+        "Your last comment looked similar to a command but Rocketbot couldn't understand it. Were you trying to [run a build](https://github.com/canva-public/rocketbot/blob/main/docs/getting-started.md#run-a-build)?",
       );
       logger.info(
         'Contains preamble but did not qualify as a trigger. Warned the user',
