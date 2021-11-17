@@ -4,13 +4,14 @@ import {
   PullRequestReviewCommentEvent,
   Repository,
 } from '@octokit/webhooks-types';
-import { isTriggerComment, parseTriggerComment } from '../trigger';
+import { isTriggerComment, parseTriggerComment, hasPreamble } from '../trigger';
 import { Logger } from 'pino';
 import { Config } from '../config';
 import { buildkiteStartBuild } from '../buildkite';
 import {
   isIssueComment,
   githubGetPullRequestDetails,
+  githubAddComment,
   githubUpdateComment,
 } from '../github';
 import type { RestEndpointMethodTypes } from '@octokit/rest';
@@ -48,6 +49,7 @@ export async function commented(
   config: Config,
   apis: GithubApis,
 ): Promise<JSONResponse> {
+  const { octokit } = apis;
   if (eventBody.action === 'deleted') {
     logger.info('Comment was deleted, nothing to do here');
     return { success: true, triggered: false };
@@ -62,15 +64,35 @@ export async function commented(
     return { success: true, triggered: false };
   }
   if (!isTriggerComment(eventBody.comment.body)) {
-    logger.info('Not a comment to trigger a build run, nothing to do here');
-    return { success: true, triggered: false };
+    if (hasPreamble(eventBody.comment.body)) {
+      const commentData = await githubAddComment(
+        octokit,
+        logger,
+        eventBody.repository,
+        isIssueComment(currentEventType, eventBody)
+          ? eventBody.issue.number
+          : eventBody.pull_request.number,
+        "Your last comment looked similar to a command but Rocketbot couldn't understand it. Were you trying to [run a build](https://github.com/canva-public/rocketbot/blob/main/docs/getting-started.md#run-a-build)?",
+      );
+      logger.info(
+        'Contains preamble but did not qualify as a trigger. Warned the user',
+      );
+      return {
+        success: true,
+        triggered: false,
+        commented: true,
+        commentUrl: commentData.html_url,
+      };
+    } else {
+      logger.info('Not a comment to trigger a build run, nothing to do here');
+      return { success: true, triggered: false };
+    }
   }
 
   const pr = isIssueComment(currentEventType, eventBody)
     ? // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       eventBody.issue.pull_request! // we know it came from a PR, otherwise we'd have exited above
     : eventBody.pull_request;
-
   const requestedBuildData = parseTriggerComment(eventBody.comment.body);
   const commentUrl = eventBody.comment.url;
   const commenter = eventBody.sender.login;
@@ -91,7 +113,6 @@ export async function commented(
     {},
   );
 
-  const { octokit } = apis;
   const [prData, { name: senderName, email: senderEmail }] = await Promise.all<
     PullRequestContext,
     UserData

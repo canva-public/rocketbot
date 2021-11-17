@@ -102,7 +102,7 @@ ${links[slug]}
     octokit,
     logger,
     eventBody.repository,
-    eventBody.pull_request,
+    eventBody.pull_request.number,
     `
 :tada: Almost merged!
 <details>
