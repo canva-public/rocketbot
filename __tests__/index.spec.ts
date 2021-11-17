@@ -306,6 +306,23 @@ describe('github-control', () => {
 
           expect(parseTriggerComment(markdown)).toStrictEqual(expected);
         });
+
+        it('should be able to deal with an unclosed block', () => {
+          expect.hasAssertions();
+          const markdown = `
+          :rocket:[x-build]
+          \`\`\`
+          A=a
+`;
+          const expected = {
+            buildNames: ['x-build'],
+            env: {
+              A: 'a',
+            },
+          };
+
+          expect(parseTriggerComment(markdown)).toStrictEqual(expected);
+        });
       });
     });
   });

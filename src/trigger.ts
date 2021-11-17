@@ -12,7 +12,7 @@ const preamblePattern = '\\s*>?\\s*`?\\s*(?:🚀|:rocket:)';
 const pipelineNameRegex = /([\w-]+)/g;
 const pipelineNamesPattern = '(?:\\s*\\[\\s*[\\w-]+\\s*\\])+\\s*`?';
 const rocketPattern = `${preamblePattern}(${pipelineNamesPattern})`;
-const envSectionPattern = '(?:```(?:ini)?\\s*((?:.|\\s)+?)\\s*```\\s*)?';
+const envSectionPattern = '(?:```(?:ini)?\\s*((?:.|\\s)+?)\\s*(?:```)?\\s*)?';
 const buildTriggerRegex = new RegExp(
   `^(${rocketPattern}\\s*)+\\s*${envSectionPattern}$`,
 );
