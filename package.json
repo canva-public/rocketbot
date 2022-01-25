@@ -70,6 +70,7 @@
   "dependencies": {
     "@octokit/auth-app": "^3.4.0",
     "@octokit/graphql": "^4.6.1",
+    "@octokit/plugin-retry": "^3.0.9",
     "@octokit/rest": "^18.5.3",
     "@octokit/webhooks-methods": "^1.0.0",
     "aws-lambda": "^1.0.6",
