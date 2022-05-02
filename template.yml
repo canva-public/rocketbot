@@ -15,6 +15,7 @@ Globals:
         BUILDKITE_TOKEN: ~
         BUILDKITE_ORG_NAME: ~
         ENABLE_DEBUG: ~
+        GITHUB_RETRY_FAILED_REQUESTS: ~
 
 Resources:
   RocketBot:
