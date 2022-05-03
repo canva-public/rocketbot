@@ -5,6 +5,7 @@ import type { Logger } from 'pino';
 import type { Config } from './config';
 import { Octokit } from '@octokit/rest';
 import { graphql } from '@octokit/graphql';
+import { retry } from '@octokit/plugin-retry';
 
 export type GithubApis = { octokit: Octokit; graphql: typeof graphql };
 
@@ -33,6 +34,10 @@ export const getGithubApis = memoizeOne(async function (
       error: (message: string) => logger.error(message),
     },
   };
+  const OctokitWithPlugins =
+    config.GITHUB_RETRY_FAILED_REQUESTS === 'true'
+      ? Octokit.plugin(retry)
+      : Octokit;
 
   if ('GITHUB_APP_APP_ID' in config) {
     logger.debug('Using app credentials');
@@ -42,7 +47,7 @@ export const getGithubApis = memoizeOne(async function (
       installationId: config.GITHUB_APP_INSTALLATION_ID,
     };
     return {
-      octokit: new Octokit({
+      octokit: new OctokitWithPlugins({
         ...octokitBaseConfig,
         authStrategy: createAppAuth,
         auth,
@@ -56,7 +61,7 @@ export const getGithubApis = memoizeOne(async function (
   } else {
     logger.debug('Using user credentials');
     return {
-      octokit: new Octokit({
+      octokit: new OctokitWithPlugins({
         ...octokitBaseConfig,
         auth: config.GITHUB_TOKEN,
       }),

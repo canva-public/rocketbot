@@ -2,6 +2,8 @@ process.env.BUILDKITE_TOKEN = process.env.BUILDKITE_TOKEN || '__bk-token';
 process.env.BUILDKITE_ORG_NAME = process.env.BUILDKITE_ORG_NAME || 'some-org';
 process.env.GITHUB_TOKEN = process.env.GITHUB_TOKEN || '__gh-token';
 process.env.ENABLE_DEBUG = process.env.ENABLE_DEBUG || 'false';
+process.env.GITHUB_RETRY_FAILED_REQUESTS =
+  process.env.GITHUB_RETRY_FAILED_REQUESTS || 'false';
 
 import type {
   APIGatewayProxyEvent,
@@ -422,6 +424,41 @@ describe('github-control', () => {
       });
       assertNockDone();
     });
+
+    it('should retry on github server error', async () => {
+      expect.hasAssertions();
+      const lambdaRequest = loadFixture<APIGatewayProxyEvent>(
+        'pull_request/lambda_request',
+      );
+      const pipelinesReply = loadFixture('pull_request/buildkite/pipelines');
+
+      nock('https://api.buildkite.com:443')
+        .get('/v2/organizations/some-org/pipelines?page=1&per_page=100')
+        .reply(200, pipelinesReply);
+
+      nock('https://api.github.com')
+        .get(
+          `/repos/some-org/some-repo/contents/${encodeURIComponent(
+            '.buildkite/pipeline/description/some-org',
+          )}` + '?ref=c0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ffeec0ffe',
+        )
+        .times(4)
+        .reply(502, {
+          message: 'Bad Gateway',
+          documentation_url: 'https://developer.github.com/v3',
+        });
+
+      const retryOption = process.env.GITHUB_RETRY_FAILED_REQUESTS;
+      process.env.GITHUB_RETRY_FAILED_REQUESTS = 'true';
+
+      const res = await handler(lambdaRequest, context);
+      assertLambdaResponse(res, 502, {
+        error: 'Bad Gateway',
+      });
+      assertNockDone();
+
+      process.env.GITHUB_RETRY_FAILED_REQUESTS = retryOption;
+    }, 30000);
 
     it('should gracefully handle non-JSON responses', async () => {
       expect.hasAssertions();

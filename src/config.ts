@@ -12,6 +12,7 @@ const BaseConfig = z.object({
   ENABLE_DEBUG: z.string().optional(),
   [GITHUB_WEBHOOK_SECRET_KEY]: z.string().optional(),
   COLLAPSE_OLD_COMMENTS: z.string().optional().default('true'),
+  GITHUB_RETRY_FAILED_REQUESTS: z.string().optional().default('true'),
 });
 
 export const Config = z.union([
