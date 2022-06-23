@@ -75,7 +75,7 @@
     "@octokit/webhooks-methods": "^1.0.0",
     "aws-lambda": "^1.0.6",
     "git-url-parse": "^11.4.4",
-    "got": "^11.8.2",
+    "got": "^11.8.5",
     "lodash.sortby": "^4.7.0",
     "memoize-one": "^5.2.1",
     "pino": "^6.11.3",
