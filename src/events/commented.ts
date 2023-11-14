@@ -175,7 +175,7 @@ ${requestedBuildData.buildNames
 `;
   const perBuildResponse = (buildName: string, idx: number) =>
     `* [${buildName}#${data[idx].number}](${data[idx].url}) scheduled at \`${data[idx].scheduled}\``;
-  const updatedComment = `pls gib green ༼ つ ◕_◕ ༽つ via ${prData.head.sha}:
+  const updatedComment = `Starting buildkite pipeline via ${prData.head.sha}:
 ${requestedBuildData.buildNames
   .map(perBuildResponse)
   .join('\n')}${envParagraph}${repeatParagraph}`;
