@@ -11,20 +11,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
+        uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2
+      - uses: actions/setup-node@7c12f8017d5436eb855f1ed4399f037a36fbd9e8 # v2
         with:
           node-version: '10'
       - run: yarn install --frozen-lockfile
       - name: Build
         run: yarn build
       - name: Create zip
-        uses: vimtor/action-zip@v1
+        uses: vimtor/action-zip@5f1c4aa587ea41db1110df6a99981dbe19cee310 # v1
         with:
           files: dist/index.js
           dest: release.zip
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
           files: ./release.zip
           fail_on_unmatched_files: true
